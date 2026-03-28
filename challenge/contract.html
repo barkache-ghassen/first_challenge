@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Contract Viewer</title>
+
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: #f4f6f8;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      padding: 40px;
+      gap: 40px;
+    }
+
+    .card {
+      background-color: #fff;
+      padding: 30px;
+      border-radius: 12px;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+      max-width: 600px;
+      width: 100%;
+    }
+
+    .right-column {
+      display: flex;
+      flex-direction: column;
+      gap: 30px;
+      max-width: 600px;
+      width: 100%;
+    }
+
+    h2 {
+      margin-bottom: 20px;
+      font-size: 1.6rem;
+      color: #333;
+    }
+
+    p {
+      margin: 10px 0;
+      font-size: 1rem;
+      color: #555;
+    }
+
+    span {
+      font-weight: bold;
+      color: #111;
+    }
+
+    /* Contract source background only */
+    #contractContent {
+      background-color: #f0f0f0;
+      padding: 15px;
+      border-radius: 12px;
+      overflow-x: auto;
+      max-height: 700px;
+      font-family: monospace;
+    }
+
+    /* Wallet addresses and private keys */
+    .wallet-pre {
+      padding: 0;
+      margin: 4px 0;
+      border-radius: 0;
+      overflow-x: auto;
+      max-height: none;
+      background-color: transparent; /* remove grey */
+      font-family: monospace;
+      color: #111;
+    }
+
+    .label {
+      color: #777;
+      font-size: 0.9rem;
+    }
+
+    .pk-toggle {
+      cursor: pointer;
+      user-select: none;
+      font-weight: bold;
+      color: #007bff;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .pk-toggle:hover {
+      color: #0056b3;
+    }
+
+    .pk-arrow {
+      transition: transform 0.2s ease;
+      display: inline-block;
+    }
+
+    .pk-arrow.open {
+      transform: rotate(90deg);
+    }
+
+    .private-key {
+      display: none;
+      margin-top: 4px;
+    }
+
+    button {
+      margin-top: 15px;
+      padding: 10px 20px;
+      font-size: 1rem;
+      font-weight: bold;
+      color: #fff;
+      background-color: #007bff;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background-color: #0056b3;
+    }
+
+    .zero-balance-message {
+      color: #dc3545;
+      font-size: 0.9rem;
+    }
+
+    .solved-badge {
+      display: inline-block;
+      background-color: #28a745;
+      color: white;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 0.9rem;
+      font-weight: bold;
+      margin-top: 10px;
+    }
+
+    #flagBox {
+      margin-top: 12px;
+      display: none;
+    }
+
+    #flagBox pre {
+      background: #111; /* black background */
+      color: #00ff88;   /* green text */
+      font-weight: bold;
+      text-align: center;
+      padding: 12px;
+      border-radius: 8px;
+      overflow-x: auto;
+    }
+
+    hr {
+      margin: 10px 0;
+      border: none;
+      border-top: 1px solid #ddd;
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- LEFT: Contract Source -->
+  <div class="card">
+    <h2>Contract Source: Welcome</h2>
+    <pre id="contractContent">Loading contract source...</pre>
+  </div>
+
+  <!-- RIGHT COLUMN -->
+  <div class="right-column">
+
+    <!-- Contract Info -->
+    <div class="card">
+      <h2>Contract Info</h2>
+
+      <p>Contract Address: <span id="contractAddress">Loading...</span></p>
+      <p>Contract Balance: <span id="contractBalance">Loading...</span> ETH</p>
+
+      <p id="zeroMessage" class="zero-balance-message">
+        Funds withdrawn successfully
+      </p>
+
+      <div id="solvedBadge"></div>
+
+      <div id="flagBox">
+        <pre id="flagValue"></pre>
+      </div>
+
+      <button id="refresh-button">Refresh Balance</button>
+
+      <p class="label">Network: <span id="network">http://127.0.0.1:8545</span></p>
+      <p class="label">Chain ID: <span id="chainId">31337</span></p>
+    </div>
+
+    <!-- Accounts Box -->
+    <div class="card">
+      <h2>Accounts</h2>
+
+      <!-- Account #0 -->
+      <p><span>Account #0</span></p>
+      <p>Address:</p>
+      <pre class="wallet-pre">0xbDA5747bFD65F08deb54cb465eB87D40e51B197E</pre>
+      <p class="pk-toggle" onclick="toggleKey('pk0','arrow0')">
+        <span id="arrow0" class="pk-arrow">▶</span> Private Key
+      </p>
+      <pre id="pk0" class="private-key wallet-pre">
+0x689af8efa8c651a91ad287602527f3af2fe9f6501a7ac4b061667b5a93e037fd
+      </pre>
+
+      <hr>
+
+      <!-- Account #1 -->
+      <p><span>Account #1</span></p>
+      <p>Address:</p>
+      <pre class="wallet-pre">0x70997970C51812dc3A010C7d01b50e0d17dc79C8</pre>
+      <p class="pk-toggle" onclick="toggleKey('pk1','arrow1')">
+        <span id="arrow1" class="pk-arrow">▶</span> Private Key
+      </p>
+      <pre id="pk1" class="private-key wallet-pre">
+0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d
+      </pre>
+
+      <hr>
+
+      <!-- Account #2 -->
+      <p><span>Account #2</span></p>
+      <p>Address:</p>
+      <pre class="wallet-pre">0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC</pre>
+      <p class="pk-toggle" onclick="toggleKey('pk2','arrow2')">
+        <span id="arrow2" class="pk-arrow">▶</span> Private Key
+      </p>
+      <pre id="pk2" class="private-key wallet-pre">
+0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a
+      </pre>
+
+      <hr>
+
+      <!-- Account #3 -->
+      <p><span>Account #3</span></p>
+      <p>Address:</p>
+      <pre class="wallet-pre">0x90F79bf6EB2c4f870365E785982E1f101E93b906</pre>
+      <p class="pk-toggle" onclick="toggleKey('pk3','arrow3')">
+        <span id="arrow3" class="pk-arrow">▶</span> Private Key
+      </p>
+      <pre id="pk3" class="private-key wallet-pre">
+0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6
+      </pre>
+
+      <hr>
+
+      <!-- Account #4 -->
+      <p><span>Account #4</span></p>
+      <p>Address:</p>
+      <pre class="wallet-pre">0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65</pre>
+      <p class="pk-toggle" onclick="toggleKey('pk4','arrow4')">
+        <span id="arrow4" class="pk-arrow">▶</span> Private Key
+      </p>
+      <pre id="pk4" class="private-key wallet-pre">
+0x47e179ec197488593b187f80a00eb0da91f1b9d0b13f8733639f19c30a34926a
+      </pre>
+
+      <hr>
+
+      <!-- Account #5 -->
+      <p><span>Account #5</span></p>
+      <p>Address:</p>
+      <pre class="wallet-pre">0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc</pre>
+      <p class="pk-toggle" onclick="toggleKey('pk5','arrow5')">
+        <span id="arrow5" class="pk-arrow">▶</span> Private Key
+      </p>
+      <pre id="pk5" class="private-key wallet-pre">
+0x8b3a350cf5c34c9194ca85829a2df0ec3153be0318b5e2d3348e872092edffba
+      </pre>
+
+    </div>
+  </div>
+
+  <script>
+    async function refreshBalance() {
+      try {
+        const res = await fetch("http://localhost:3000/balance");
+        const data = await res.json();
+
+        document.getElementById("contractAddress").textContent = data.address;
+        document.getElementById("contractBalance").textContent = data.balance;
+        document.getElementById("network").textContent =
+          data.network || "http://127.0.0.1:8545";
+        document.getElementById("chainId").textContent =
+          data.chainId || 31337;
+
+        const solvedRes = await fetch("http://localhost:3000/check-solved");
+        const solvedData = await solvedRes.json();
+
+        const solvedBadgeDiv = document.getElementById("solvedBadge");
+        const zeroMessage = document.getElementById("zeroMessage");
+        const flagBox = document.getElementById("flagBox");
+
+        if (solvedData.solved) {
+          zeroMessage.style.display = "block";
+          solvedBadgeDiv.innerHTML =
+            '<div class="solved-badge">✓ Challenge Solved!</div>';
+
+          if (solvedData.flag) {
+            document.getElementById("flagValue").textContent = solvedData.flag;
+            flagBox.style.display = "block";
+          }
+        } else {
+          zeroMessage.style.display = "none";
+          solvedBadgeDiv.innerHTML = "";
+          flagBox.style.display = "none";
+        }
+
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    document
+      .getElementById("refresh-button")
+      .addEventListener("click", refreshBalance);
+
+    refreshBalance();
+
+    fetch("http://localhost:3000/contracts/contract.sol")
+      .then(res => res.text())
+      .then(text => {
+        document.getElementById("contractContent").textContent = text;
+      })
+      .catch(err => {
+        document.getElementById("contractContent").textContent =
+          "Error loading contract: " + err.message;
+      });
+
+    function toggleKey(keyId, arrowId) {
+      const key = document.getElementById(keyId);
+      const arrow = document.getElementById(arrowId);
+
+      const isOpen = key.style.display === "block";
+      key.style.display = isOpen ? "none" : "block";
+
+      if (arrow) {
+        arrow.classList.toggle("open", !isOpen);
+      }
+    }
+  </script>
+</body>
+</html>
