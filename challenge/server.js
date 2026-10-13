@@ -3,7 +3,10 @@ const cors = require("cors");
 const path = require("path");
 const get_balance = require("./getbalance");
 const { ethers } = require("ethers");
+const fs = require("fs");
 
+// Load flag from secure file
+const FLAG = fs.readFileSync('./flag.txt', 'utf8').trim();
 const app = express();
 app.use(cors());
 
@@ -34,7 +37,7 @@ app.get("/check-solved", async (req, res) => {
     // Only now reveal sensitive data
     res.json({
       solved: true,
-      flag: "W3X{W3lc0m3_70_7h3_3th3r3um_w0r1d!}"
+      flag: FLAG,
     });
 
   } catch (err) {
