@@ -1,1 +1,4 @@
 Welcome.tar
+
+# Local solve helpers — never commit (challenge/ is copied into the player image)
+**/challenge/solve.js

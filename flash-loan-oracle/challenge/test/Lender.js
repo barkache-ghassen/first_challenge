@@ -5,16 +5,19 @@ describe("Spot lender", function () {
   const ether = (amount) => ethers.parseEther(amount.toString());
 
   async function deploy() {
-    const [deployer, player] = await ethers.getSigners();
-    const weth = await ethers.deployContract("Asset", ["Wrapped Ether", "WETH"]);
-    const usd = await ethers.deployContract("Asset", ["Dollar", "USD"]);
-    const pool = await ethers.deployContract("SpotPool", [await weth.getAddress(), await usd.getAddress()]);
-    const flash = await ethers.deployContract("FlashLender", [await weth.getAddress()]);
+    // Mirrors the fixed accounts in hardhat.config.js: #4 deploys, #0 plays.
+    const signers = await ethers.getSigners();
+    const deployer = signers[4];
+    const player = signers[0];
+    const weth = await ethers.deployContract("Asset", ["Wrapped Ether", "WETH"], deployer);
+    const usd = await ethers.deployContract("Asset", ["Dollar", "USD"], deployer);
+    const pool = await ethers.deployContract("SpotPool", [await weth.getAddress(), await usd.getAddress()], deployer);
+    const flash = await ethers.deployContract("FlashLender", [await weth.getAddress()], deployer);
     const lender = await ethers.deployContract("Lender", [
       await weth.getAddress(),
       await usd.getAddress(),
       await pool.getAddress(),
-    ]);
+    ], deployer);
 
     await weth.mint(await pool.getAddress(), ether(100));
     await usd.mint(await pool.getAddress(), ether(200000));

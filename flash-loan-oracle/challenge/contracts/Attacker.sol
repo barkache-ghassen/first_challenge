@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
-import "./Market.sol";
+import "./Asset.sol";
+import "./SpotPool.sol";
+import "./FlashLender.sol";
+import "./Lender.sol";
 
 contract Attacker is IFlashBorrower {
     SpotPool public immutable pool;

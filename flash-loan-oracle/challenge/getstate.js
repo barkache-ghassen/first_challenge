@@ -8,6 +8,11 @@ const LENDER_ABI = [
   "function usd() view returns (address)",
   "function pool() view returns (address)",
 ];
+const POOL_ABI = [
+  "function reserveWeth() view returns (uint256)",
+  "function reserveUsd() view returns (uint256)",
+  "function wethPrice() view returns (uint256)",
+];
 const ERC20_ABI = ["function balanceOf(address) view returns (uint256)"];
 
 async function getState() {
@@ -31,10 +36,15 @@ async function getState() {
   }
 
   const lender = new ethers.Contract(lenderAddress, LENDER_ABI, provider);
+  const pool = new ethers.Contract(poolAddress, POOL_ABI, provider);
   const weth = new ethers.Contract(wethAddress, ERC20_ABI, provider);
-  const [solved, lenderWeth] = await Promise.all([
+  const [solved, lenderWeth, flashWeth, reserveWeth, reserveUsd, wethPrice] = await Promise.all([
     lender.solved(),
     weth.balanceOf(lenderAddress),
+    weth.balanceOf(flashAddress),
+    pool.reserveWeth(),
+    pool.reserveUsd(),
+    pool.wethPrice(),
   ]);
   const network = await provider.getNetwork();
 
@@ -45,6 +55,10 @@ async function getState() {
     flashAddress,
     lenderAddress,
     lenderWeth: ethers.formatEther(lenderWeth),
+    flashWeth: ethers.formatEther(flashWeth),
+    reserveWeth: ethers.formatEther(reserveWeth),
+    reserveUsd: ethers.formatEther(reserveUsd),
+    wethPrice: ethers.formatEther(wethPrice),
     solved,
     network: rpcUrl,
     chainId: Number(network.chainId),

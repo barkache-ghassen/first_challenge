@@ -17,26 +17,31 @@ app.use(cors({
   },
 }));
 
+const CONTRACTS = ["Asset", "SpotPool", "FlashLender", "Lender"];
+
 function readArtifact(contractName) {
   return JSON.parse(fs.readFileSync(
-    path.join(__dirname, "artifacts", "contracts", "Market.sol", `${contractName}.json`),
+    path.join(__dirname, "artifacts", "contracts", `${contractName}.sol`, `${contractName}.json`),
     "utf8"
   ));
 }
 
-app.get("/contracts/Market.sol", (req, res) => {
-  const file = path.join(__dirname, "contracts", "Market.sol");
+app.get("/contracts/:file", (req, res) => {
+  const name = req.params.file.replace(/\.sol$/, "");
+  if (!CONTRACTS.includes(name)) {
+    return res.status(404).type("text/plain").send("Unknown contract");
+  }
+  const file = path.join(__dirname, "contracts", `${name}.sol`);
   res.type("text/plain").send(fs.readFileSync(file, "utf8"));
 });
 
 app.get("/abi", (req, res) => {
   try {
-    res.json({
-      Asset: readArtifact("Asset").abi,
-      SpotPool: readArtifact("SpotPool").abi,
-      FlashLender: readArtifact("FlashLender").abi,
-      Lender: readArtifact("Lender").abi,
-    });
+    const abis = {};
+    for (const name of CONTRACTS) {
+      abis[name] = readArtifact(name).abi;
+    }
+    res.json(abis);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "ABI is unavailable" });

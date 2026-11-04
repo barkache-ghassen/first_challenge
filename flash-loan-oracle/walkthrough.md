@@ -2,7 +2,7 @@
 
 This note is for reviewers. The Dockerfile does not copy it into the image, and it also removes `contracts/Attacker.sol` and `test/` from the image.
 
-The lender holds 50 WETH. Borrowing capacity is 50% of USD collateral, valued with `SpotPool.wethPrice()`, which is the current reserve ratio. Accounts 1 through 5 each start with 1 WETH and 10,000 USD. At the starting price of 2,000 USD per WETH, that collateral can borrow 2.5 WETH, and debt is recorded so the same collateral cannot be borrowed twice.
+The lender holds 50 WETH. Borrowing capacity is 50% of USD collateral, valued with `SpotPool.wethPrice()`, which is the current reserve ratio. Accounts #0 through #3 each start with 1 WETH and 10,000 USD. At the starting price of 2,000 USD per WETH, that collateral can borrow 2.5 WETH, and debt is recorded so the same collateral cannot be borrowed twice.
 
 `FlashLender` will send WETH to a contract and require repayment before the call returns. `SpotPool` has no fee. Selling WETH into the pool moves the reserve price. The lender reads that price with no delay and no average.
 

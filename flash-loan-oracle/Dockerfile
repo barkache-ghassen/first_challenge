@@ -4,7 +4,7 @@ USER root
 
 COPY challenge /root/challenge
 RUN chmod 400 /root/challenge/flag.txt
-RUN rm -rf /root/challenge/contracts/Attacker.sol /root/challenge/test
+RUN rm -rf /root/challenge/contracts/Attacker.sol /root/challenge/test /root/challenge/solve.js
 
 COPY challenge_icon.png /usr/share/pixmaps/challenge_icon.png
 

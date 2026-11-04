@@ -4,7 +4,8 @@
 
 ## Problem statement
 
-A small DeFi market made of four contracts (`challenge/contracts/Market.sol`):
+A small DeFi market made of four contracts, one file each in `challenge/contracts/`
+(each gets its own tab on the contract page):
 
 - **`Asset`** — minimal ERC-20 used for both `WETH` and `USD`.
 - **`SpotPool`** — a constant-product AMM holding 100 WETH / 200,000 USD, so it
@@ -15,7 +16,7 @@ A small DeFi market made of four contracts (`challenge/contracts/Market.sol`):
 - **`FlashLender`** — lends up to 5,000 WETH in a single transaction, as long as
   it is repaid before the call returns.
 
-The player starts with the standard funded Hardhat accounts (1 WETH + 10,000 USD
+The player starts with the four fixed Hardhat accounts, #0 to #3 (1 WETH + 10,000 USD
 each). At the fair price that collateral can only borrow a few WETH, and debt is
 tracked so you cannot reuse it.
 
