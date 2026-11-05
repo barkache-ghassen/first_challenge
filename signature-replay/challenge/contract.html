@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Signature Replay</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      background: #f4f6f8;
+      color: #222;
+      margin: 0 auto;
+      max-width: 1400px;
+      padding: 40px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 28px;
+    }
+    h2 { margin: 0 0 16px; font-size: 1.5rem; }
+    p, li { line-height: 1.5; }
+    ol { margin: 0; padding-left: 20px; }
+    code { font-family: Consolas, monospace; background: #f0f3f6; padding: 1px 6px; border-radius: 4px; }
+    .row { display: flex; gap: 24px; align-items: flex-start; }
+    .row .card { flex: 1 1 0; min-width: 0; }
+    .label { color: #666; }
+    .mono { font-family: Consolas, monospace; font-weight: 700; word-break: break-all; }
+    button {
+      margin-top: 12px;
+      margin-right: 8px;
+      padding: 10px 18px;
+      font-weight: 700;
+      color: #fff;
+      background: #007bff;
+      border: 0;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    button:hover { background: #0056b3; }
+    pre {
+      background: #1e1e1e;
+      color: #d4d4d4;
+      border-radius: 12px;
+      padding: 16px;
+      overflow: auto;
+      max-height: 560px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .voucher-pre { background: #f0f3f6; color: #111; max-height: none; }
+    .wallet-pre { background: transparent; color: #111; padding: 0; margin: 4px 0; max-height: none; }
+    .private-key { display: none; }
+    .pk-toggle { cursor: pointer; color: #007bff; font-weight: 700; }
+    hr { border: 0; border-top: 1px solid #ddd; margin: 14px 0; }
+    .status { display: flex; gap: 12px; align-items: center; font-weight: 700; }
+    .dot { width: 12px; height: 12px; border-radius: 50%; background: #f5c518; }
+    .status.connected .dot { background: #28a745; }
+    .status.lost .dot { background: #dc3545; }
+    .solved { display: inline-block; background: #28a745; color: #fff; border-radius: 6px; padding: 8px 12px; font-weight: 700; }
+    #flagBox { display: none; margin-top: 12px; }
+    #flagBox pre { color: #00ff88; text-align: center; font-weight: 700; }
+    .copyable { cursor: pointer; }
+  </style>
+</head>
+<body>
+  <div class="card status" id="status-card">
+    <div class="dot"></div>
+    <div>
+      <div id="status-title">Connecting to server…</div>
+      <div class="label" id="status-sub">Waiting for the challenge API</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Signature Replay</h2>
+    <p>The <strong>SignatureVault</strong> pays out ETH to anyone who presents a withdrawal <em>voucher</em> signed by the trusted operator. The operator signed exactly <strong>one</strong> voucher — <strong>1 ETH</strong> to Account&nbsp;#1 — but the vault holds <strong>10 ETH</strong>.</p>
+    <ol>
+      <li>Read <code>Vault.sol</code> below and look closely at how <code>redeem()</code> validates a voucher.</li>
+      <li>You are given the operator's signature <code>(v, r, s)</code> for that one voucher (see <strong>The voucher</strong>).</li>
+      <li>Find a way to take more than the 1 ETH the operator authorized, and empty the vault.</li>
+    </ol>
+    <p>The challenge is solved when the vault's balance reaches <code>0</code> (checked on-chain via <code>solved()</code>).</p>
+  </div>
+
+  <div class="row">
+    <div class="card">
+      <h2>Contract</h2>
+      <p>SignatureVault<br><span id="vaultAddress" class="mono copyable">Loading...</span></p>
+      <p>Operator (trusted signer)<br><span id="operator" class="mono copyable">Loading...</span></p>
+      <p>Vault balance: <span id="balance" class="mono">Loading...</span></p>
+      <p>Total released: <span id="totalReleased" class="mono">Loading...</span></p>
+      <p id="solvedBadge"></p>
+      <div id="flagBox"><pre id="flagValue"></pre></div>
+      <button id="refresh-button" type="button">Refresh</button>
+      <button id="toggle-abi-button" type="button">Show ABI</button>
+      <pre id="abiContent" style="display:none">Loading ABI...</pre>
+      <p class="label">Network: <span id="network">http://127.0.0.1:8545</span></p>
+      <p class="label">Chain ID: <span id="chainId">31337</span></p>
+    </div>
+
+    <div class="card">
+      <h2>The voucher</h2>
+      <p class="label">The operator signed this single withdrawal voucher. The signed message is <code>keccak256(abi.encodePacked(to, amount))</code> with the standard <code>\x19Ethereum Signed Message:\n32</code> prefix.</p>
+      <p>Beneficiary (<code>to</code>)<br><span id="v-to" class="mono copyable">Loading...</span></p>
+      <p>Amount (<code>amount</code>)<br><span id="v-amount" class="mono copyable">Loading...</span></p>
+      <p><code>v</code>: <span id="v-v" class="mono copyable">—</span></p>
+      <p><code>r</code><br><span id="v-r" class="mono copyable">Loading...</span></p>
+      <p><code>s</code><br><span id="v-s" class="mono copyable">Loading...</span></p>
+      <p>Raw signature</p>
+      <pre id="v-sig" class="voucher-pre copyable">Loading...</pre>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="card">
+      <h2>Local accounts</h2>
+      <p class="label">These are Hardhat's local development accounts. Use them only on this chain. The voucher pays Account&nbsp;#1.</p>
+
+      <p><strong>Account #0</strong></p>
+      <pre class="wallet-pre copyable">0xbDA5747bFD65F08deb54cb465eB87D40e51B197E</pre>
+      <p class="pk-toggle" data-key="pk0">Private key</p>
+      <pre id="pk0" class="private-key wallet-pre copyable">0x689af8efa8c651a91ad287602527f3af2fe9f6501a7ac4b061667b5a93e037fd</pre>
+
+      <hr>
+
+      <p><strong>Account #1</strong> · voucher beneficiary</p>
+      <pre class="wallet-pre copyable">0x70997970C51812dc3A010C7d01b50e0d17dc79C8</pre>
+      <p class="pk-toggle" data-key="pk1">Private key</p>
+      <pre id="pk1" class="private-key wallet-pre copyable">0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d</pre>
+
+      <hr>
+
+      <p><strong>Account #2</strong></p>
+      <pre class="wallet-pre copyable">0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC</pre>
+      <p class="pk-toggle" data-key="pk2">Private key</p>
+      <pre id="pk2" class="private-key wallet-pre copyable">0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a</pre>
+
+      <hr>
+
+      <p><strong>Account #3</strong></p>
+      <pre class="wallet-pre copyable">0x90F79bf6EB2c4f870365E785982E1f101E93b906</pre>
+      <p class="pk-toggle" data-key="pk3">Private key</p>
+      <pre id="pk3" class="private-key wallet-pre copyable">0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6</pre>
+    </div>
+
+    <div class="card">
+      <h2>Contract source</h2>
+      <pre id="contractContent">Loading contract source...</pre>
+    </div>
+  </div>
+
+  <script>
+    const API = new URLSearchParams(location.search).get("api") || "http://127.0.0.1:3000";
+    let sourceLoaded = false;
+    let voucherLoaded = false;
+
+    function setStatus(state, title, sub) {
+      const card = document.getElementById("status-card");
+      card.className = "card status " + state;
+      document.getElementById("status-title").textContent = title;
+      document.getElementById("status-sub").textContent = sub;
+    }
+
+    function toEth(wei) {
+      try { return (BigInt(wei) / (10n ** 15n)).toString() / 1000 + " ETH"; }
+      catch { return wei; }
+    }
+
+    async function refresh() {
+      try {
+        const statusRes = await fetch(API + "/status");
+        if (!statusRes.ok) throw new Error("status " + statusRes.status);
+        const data = await statusRes.json();
+        setStatus("connected", "Server connected", "The challenge API is responding");
+        document.getElementById("vaultAddress").textContent = data.vaultAddress;
+        document.getElementById("operator").textContent = data.operator;
+        document.getElementById("balance").textContent = data.balance + " wei (" + toEth(data.balance) + ")";
+        document.getElementById("totalReleased").textContent = data.totalReleased + " wei (" + toEth(data.totalReleased) + ")";
+        document.getElementById("network").textContent = data.network || "http://127.0.0.1:8545";
+        document.getElementById("chainId").textContent = data.chainId || 31337;
+
+        if (!voucherLoaded && data.voucher) {
+          voucherLoaded = true;
+          const v = data.voucher;
+          document.getElementById("v-to").textContent = v.to;
+          document.getElementById("v-amount").textContent = v.amount + " wei (" + toEth(v.amount) + ")";
+          document.getElementById("v-v").textContent = v.v;
+          document.getElementById("v-r").textContent = v.r;
+          document.getElementById("v-s").textContent = v.s;
+          document.getElementById("v-sig").textContent = v.signature;
+        }
+
+        if (!sourceLoaded) {
+          sourceLoaded = true;
+          const sourceRes = await fetch(API + "/contracts/Vault.sol");
+          document.getElementById("contractContent").textContent = sourceRes.ok
+            ? await sourceRes.text()
+            : "Contract source is unavailable.";
+        }
+
+        const solvedRes = await fetch(API + "/check-solved");
+        const solvedData = await solvedRes.json();
+        const badge = document.getElementById("solvedBadge");
+        const flagBox = document.getElementById("flagBox");
+        if (solvedData.solved) {
+          badge.innerHTML = '<span class="solved">Challenge solved</span>';
+          if (solvedData.flag) {
+            document.getElementById("flagValue").textContent = solvedData.flag;
+            flagBox.style.display = "block";
+          }
+        } else {
+          badge.textContent = "";
+          flagBox.style.display = "none";
+        }
+      } catch (err) {
+        setStatus("lost", "Lost connection", "The challenge API is unreachable");
+        console.error(err);
+      }
+    }
+
+    document.getElementById("refresh-button").addEventListener("click", refresh);
+    document.getElementById("toggle-abi-button").addEventListener("click", async () => {
+      const box = document.getElementById("abiContent");
+      const button = document.getElementById("toggle-abi-button");
+      const open = box.style.display === "block";
+      if (open) {
+        box.style.display = "none";
+        button.textContent = "Show ABI";
+        return;
+      }
+      box.style.display = "block";
+      button.textContent = "Hide ABI";
+      if (box.textContent.trim() === "Loading ABI...") {
+        try {
+          const res = await fetch(API + "/abi");
+          if (!res.ok) throw new Error("abi " + res.status);
+          box.textContent = JSON.stringify(await res.json(), null, 2);
+        } catch (err) {
+          box.textContent = "Unable to load ABI.";
+        }
+      }
+    });
+
+    document.querySelectorAll(".pk-toggle").forEach((toggle) => {
+      toggle.addEventListener("click", () => {
+        const key = document.getElementById(toggle.dataset.key);
+        key.style.display = key.style.display === "block" ? "none" : "block";
+      });
+    });
+
+    document.addEventListener("click", (e) => {
+      const el = e.target.closest(".copyable");
+      if (!el) return;
+      const text = el.textContent.trim();
+      if (text && text !== "Loading...") navigator.clipboard.writeText(text);
+    });
+
+    refresh();
+    setInterval(refresh, 3000);
+  </script>
+</body>
+</html>

@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Spot Lender</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      background: #f4f6f8;
+      color: #222;
+      margin: 0 auto;
+      max-width: 1400px;
+      padding: 40px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+    .card { background: #fff; border-radius: 12px; padding: 28px; }
+    h2 { margin: 0 0 16px; font-size: 1.5rem; }
+    h3 { margin: 20px 0 8px; font-size: 1.1rem; }
+    p, li { line-height: 1.5; }
+    ol, ul { margin: 0; padding-left: 20px; }
+    code { font-family: Consolas, monospace; background: #f0f3f6; padding: 1px 6px; border-radius: 4px; }
+    a { color: #007bff; }
+    .row { display: flex; gap: 24px; align-items: flex-start; }
+    .row .card { flex: 1 1 0; min-width: 0; }
+    .label { color: #666; }
+    .mono { font-family: Consolas, monospace; font-weight: 700; word-break: break-all; }
+    button {
+      margin-top: 12px;
+      margin-right: 8px;
+      padding: 10px 18px;
+      font-weight: 700;
+      color: #fff;
+      background: #007bff;
+      border: 0;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    button:hover { background: #0056b3; }
+    pre {
+      background: #1e1e1e;
+      color: #d4d4d4;
+      border-radius: 12px;
+      padding: 16px;
+      overflow: auto;
+      max-height: 560px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .wallet-pre { background: transparent; color: #111; padding: 0; margin: 4px 0; max-height: none; }
+    .private-key { display: none; }
+    .pk-toggle { cursor: pointer; color: #007bff; font-weight: 700; }
+    hr { border: 0; border-top: 1px solid #ddd; margin: 14px 0; }
+    .status { display: flex; gap: 12px; align-items: center; font-weight: 700; }
+    .dot { width: 12px; height: 12px; border-radius: 50%; background: #f5c518; }
+    .status.connected .dot { background: #28a745; }
+    .status.lost .dot { background: #dc3545; }
+    .solved { display: inline-block; background: #28a745; color: #fff; border-radius: 6px; padding: 8px 12px; font-weight: 700; }
+    #flagBox { display: none; margin-top: 12px; }
+    #flagBox pre { color: #00ff88; text-align: center; font-weight: 700; }
+    .copyable { cursor: pointer; }
+
+    /* Tabs: one per contract so multi-contract challenges stay readable. */
+    .tabs { display: flex; flex-wrap: wrap; gap: 8px; }
+    .tab {
+      margin: 0;
+      padding: 10px 18px;
+      color: #333;
+      background: #fff;
+      border: 1px solid #dfe3e8;
+      border-radius: 8px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .tab:hover { background: #eef4ff; }
+    .tab.active { color: #fff; background: #007bff; border-color: #007bff; }
+    .tab .kind { font-weight: 400; opacity: .75; font-size: .85em; }
+    .panel { display: none; flex-direction: column; gap: 24px; }
+    .panel.active { display: flex; }
+    @media (max-width: 900px) {
+      body { padding: 16px; }
+      .row { flex-direction: column; }
+      .row .card { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="card status" id="status-card">
+    <div class="dot"></div>
+    <div>
+      <div id="status-title">Connecting to server…</div>
+      <div class="label" id="status-sub">Waiting for the challenge API</div>
+    </div>
+  </div>
+
+  <nav class="tabs" id="tabs">
+    <button class="tab" data-tab="overview">Overview</button>
+    <button class="tab" data-tab="Asset">Asset <span class="kind">WETH · USD</span></button>
+    <button class="tab" data-tab="SpotPool">SpotPool <span class="kind">contract</span></button>
+    <button class="tab" data-tab="FlashLender">FlashLender <span class="kind">contract</span></button>
+    <button class="tab" data-tab="Lender">Lender <span class="kind">contract</span></button>
+    <button class="tab" data-tab="accounts">Accounts</button>
+  </nav>
+
+  <!-- Overview -->
+  <section class="panel" id="panel-overview">
+    <div class="card">
+      <h2>Spot Lender</h2>
+      <p>The lender holds 50 WETH. It lets an account borrow up to half the USD value of posted collateral. That value comes from the spot pool's current reserves. Debt is recorded, so the same collateral cannot be borrowed twice.</p>
+      <p>Accounts #0 through #3 each start with 1 WETH and 10,000 USD. At the opening price, 2,000 USD per WETH, those funds can borrow 2.5 WETH. <code>FlashLender</code> will lend its WETH to a contract that pays the same amount back before the call returns.</p>
+      <p>Empty the lender's WETH balance. <code>solved()</code> becomes true only after the lender has an outstanding borrow and holds no WETH.</p>
+      <p class="label">Each contract has its own tab with its address, live state and source:</p>
+      <ul class="label">
+        <li><strong>Asset</strong>: the ERC20 used for both WETH and USD.</li>
+        <li><strong>SpotPool</strong>: the WETH/USD pool whose reserves set the price.</li>
+        <li><strong>FlashLender</strong>: lends WETH that must be repaid in the same call.</li>
+        <li><strong>Lender</strong>: takes USD collateral and lends out WETH. This is the target.</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h2>Status</h2>
+      <p>Lender WETH balance: <span id="lenderWethOverview" class="mono">Loading...</span></p>
+      <p id="solvedBadge"></p>
+      <div id="flagBox"><pre id="flagValue"></pre></div>
+      <button id="refresh-button" type="button">Refresh</button>
+      <p class="label">Network: <span id="network">http://127.0.0.1:8545</span></p>
+      <p class="label">Chain ID: <span id="chainId">31337</span></p>
+    </div>
+  </section>
+
+  <!-- Asset -->
+  <section class="panel" id="panel-Asset">
+    <div class="row">
+      <div class="card">
+        <h2>Asset</h2>
+        <p>WETH<br><span id="wethAddress" class="mono copyable">Loading...</span></p>
+        <p>USD<br><span id="usdAddress" class="mono copyable">Loading...</span></p>
+        <p class="label">One contract deployed twice. Only the deployer can mint.</p>
+        <button type="button" class="abi-toggle" data-contract="Asset">Show ABI</button>
+        <pre class="abi-box" data-contract="Asset" style="display:none">Loading ABI...</pre>
+      </div>
+      <div class="card">
+        <h2>Source</h2>
+        <pre class="source" data-contract="Asset">Loading contract source...</pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- SpotPool -->
+  <section class="panel" id="panel-SpotPool">
+    <div class="row">
+      <div class="card">
+        <h2>SpotPool</h2>
+        <p>Address<br><span id="poolAddress" class="mono copyable">Loading...</span></p>
+        <p>WETH reserve: <span id="reserveWeth" class="mono">Loading...</span></p>
+        <p>USD reserve: <span id="reserveUsd" class="mono">Loading...</span></p>
+        <p>Spot price, <code>wethPrice()</code>: <span id="wethPrice" class="mono">Loading...</span> USD per WETH</p>
+        <button type="button" class="abi-toggle" data-contract="SpotPool">Show ABI</button>
+        <pre class="abi-box" data-contract="SpotPool" style="display:none">Loading ABI...</pre>
+      </div>
+      <div class="card">
+        <h2>Source</h2>
+        <pre class="source" data-contract="SpotPool">Loading contract source...</pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- FlashLender -->
+  <section class="panel" id="panel-FlashLender">
+    <div class="row">
+      <div class="card">
+        <h2>FlashLender</h2>
+        <p>Address<br><span id="flashAddress" class="mono copyable">Loading...</span></p>
+        <p>WETH available: <span id="flashWeth" class="mono">Loading...</span></p>
+        <p class="label">Your contract must implement <code>IFlashBorrower.onFlash</code> and return the WETH before <code>flash()</code> finishes.</p>
+        <button type="button" class="abi-toggle" data-contract="FlashLender">Show ABI</button>
+        <pre class="abi-box" data-contract="FlashLender" style="display:none">Loading ABI...</pre>
+      </div>
+      <div class="card">
+        <h2>Source</h2>
+        <pre class="source" data-contract="FlashLender">Loading contract source...</pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- Lender -->
+  <section class="panel" id="panel-Lender">
+    <div class="row">
+      <div class="card">
+        <h2>Lender</h2>
+        <p>Address<br><span id="lenderAddress" class="mono copyable">Loading...</span></p>
+        <p>WETH balance: <span id="lenderWeth" class="mono">Loading...</span></p>
+        <button type="button" class="abi-toggle" data-contract="Lender">Show ABI</button>
+        <pre class="abi-box" data-contract="Lender" style="display:none">Loading ABI...</pre>
+      </div>
+      <div class="card">
+        <h2>Source</h2>
+        <pre class="source" data-contract="Lender">Loading contract source...</pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- Accounts -->
+  <section class="panel" id="panel-accounts">
+    <div class="card">
+      <h2>Local accounts</h2>
+      <p class="label">Hardhat development accounts for this local chain only. Each one holds 1 WETH and 10,000 USD.</p>
+
+      <p><strong>Account #0</strong></p>
+      <pre class="wallet-pre copyable">0xbDA5747bFD65F08deb54cb465eB87D40e51B197E</pre>
+      <p class="pk-toggle" data-key="pk0">Private key</p>
+      <pre id="pk0" class="private-key wallet-pre copyable">0x689af8efa8c651a91ad287602527f3af2fe9f6501a7ac4b061667b5a93e037fd</pre>
+      <hr>
+
+      <p><strong>Account #1</strong></p>
+      <pre class="wallet-pre copyable">0x70997970C51812dc3A010C7d01b50e0d17dc79C8</pre>
+      <p class="pk-toggle" data-key="pk1">Private key</p>
+      <pre id="pk1" class="private-key wallet-pre copyable">0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d</pre>
+      <hr>
+
+      <p><strong>Account #2</strong></p>
+      <pre class="wallet-pre copyable">0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC</pre>
+      <p class="pk-toggle" data-key="pk2">Private key</p>
+      <pre id="pk2" class="private-key wallet-pre copyable">0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a</pre>
+      <hr>
+
+      <p><strong>Account #3</strong></p>
+      <pre class="wallet-pre copyable">0x90F79bf6EB2c4f870365E785982E1f101E93b906</pre>
+      <p class="pk-toggle" data-key="pk3">Private key</p>
+      <pre id="pk3" class="private-key wallet-pre copyable">0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6</pre>
+    </div>
+  </section>
+
+  <script>
+    const API = new URLSearchParams(location.search).get("api") || "http://127.0.0.1:3000";
+    const loadedSources = new Set();
+
+    function showTab(name) {
+      if (!document.getElementById("panel-" + name)) name = "overview";
+      document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.tab === name));
+      document.querySelectorAll(".panel").forEach((p) => p.classList.toggle("active", p.id === "panel-" + name));
+      history.replaceState(null, "", "#" + name);
+      loadSource(name);
+    }
+
+    async function loadSource(name) {
+      const box = document.querySelector('.source[data-contract="' + name + '"]');
+      if (!box || loadedSources.has(name)) return;
+      try {
+        const res = await fetch(API + "/contracts/" + name + ".sol");
+        if (!res.ok) throw new Error("source " + res.status);
+        box.textContent = await res.text();
+        loadedSources.add(name);
+      } catch (err) {
+        box.textContent = "Contract source is unavailable.";
+      }
+    }
+
+    function setStatus(state, title, sub) {
+      document.getElementById("status-card").className = "card status " + state;
+      document.getElementById("status-title").textContent = title;
+      document.getElementById("status-sub").textContent = sub;
+    }
+
+    function setText(id, value) {
+      document.getElementById(id).textContent = value;
+    }
+
+    async function refresh() {
+      try {
+        const res = await fetch(API + "/status");
+        if (!res.ok) throw new Error("status " + res.status);
+        const data = await res.json();
+        setStatus("connected", "Server connected", "The challenge API is responding");
+        setText("wethAddress", data.wethAddress);
+        setText("usdAddress", data.usdAddress);
+        setText("poolAddress", data.poolAddress);
+        setText("flashAddress", data.flashAddress);
+        setText("lenderAddress", data.lenderAddress);
+        setText("lenderWeth", data.lenderWeth);
+        setText("lenderWethOverview", data.lenderWeth);
+        setText("flashWeth", data.flashWeth);
+        setText("reserveWeth", data.reserveWeth);
+        setText("reserveUsd", data.reserveUsd);
+        setText("wethPrice", data.wethPrice);
+        setText("network", data.network || "http://127.0.0.1:8545");
+        setText("chainId", data.chainId || 31337);
+
+        const badge = document.getElementById("solvedBadge");
+        const flagBox = document.getElementById("flagBox");
+        if (data.solved) {
+          const solvedRes = await fetch(API + "/check-solved");
+          const solvedData = await solvedRes.json();
+          badge.innerHTML = '<span class="solved">Challenge solved</span>';
+          if (solvedData.flag) {
+            setText("flagValue", solvedData.flag);
+            flagBox.style.display = "block";
+          }
+        } else {
+          badge.textContent = "";
+          flagBox.style.display = "none";
+        }
+      } catch (err) {
+        setStatus("lost", "Lost connection", "The challenge API is unreachable");
+        console.error(err);
+      }
+    }
+
+    document.querySelectorAll(".tab").forEach((tab) => {
+      tab.addEventListener("click", () => showTab(tab.dataset.tab));
+    });
+
+    document.querySelectorAll(".abi-toggle").forEach((button) => {
+      button.addEventListener("click", async () => {
+        const name = button.dataset.contract;
+        const box = document.querySelector('.abi-box[data-contract="' + name + '"]');
+        const open = box.style.display === "block";
+        box.style.display = open ? "none" : "block";
+        button.textContent = open ? "Show ABI" : "Hide ABI";
+        if (open || box.textContent.trim() !== "Loading ABI...") return;
+        try {
+          const res = await fetch(API + "/abi");
+          if (!res.ok) throw new Error("abi " + res.status);
+          box.textContent = JSON.stringify((await res.json())[name], null, 2);
+        } catch (err) {
+          box.textContent = "Unable to load ABI.";
+        }
+      });
+    });
+
+    document.getElementById("refresh-button").addEventListener("click", refresh);
+
+    document.querySelectorAll(".pk-toggle").forEach((toggle) => {
+      toggle.addEventListener("click", () => {
+        const key = document.getElementById(toggle.dataset.key);
+        key.style.display = key.style.display === "block" ? "none" : "block";
+      });
+    });
+
+    document.addEventListener("click", (e) => {
+      const el = e.target.closest(".copyable");
+      if (!el) return;
+      const text = el.textContent.trim();
+      if (text && text !== "Loading...") navigator.clipboard.writeText(text);
+    });
+
+    showTab(location.hash.slice(1) || "overview");
+    refresh();
+    setInterval(refresh, 3000);
+  </script>
+</body>
+</html>
