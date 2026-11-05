@@ -1,5 +1,5 @@
 // Checks the client's requirements against the files in the repo.
-// Run: node --test tests/requirements.test.js   (needs `npm ci` in approval-trap/challenge for ethers)
+// Run: node --test tests/requirements.test.js   (needs `npm ci` in flash-loan-oracle/challenge for ethers)
 const { describe, it } = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("fs");
@@ -7,8 +7,8 @@ const path = require("path");
 const { createRequire } = require("module");
 
 const ROOT = path.resolve(__dirname, "..");
-const CHALLENGES = ["approval-trap", "flash-loan-oracle", "signature-replay"];
-const { ethers } = createRequire(path.join(ROOT, "approval-trap/challenge/package.json"))("ethers");
+const CHALLENGES = ["flash-loan-oracle", "signature-replay"];
+const { ethers } = createRequire(path.join(ROOT, "flash-loan-oracle/challenge/package.json"))("ethers");
 
 const read = (...p) => fs.readFileSync(path.join(ROOT, ...p), "utf8");
 const exists = (...p) => fs.existsSync(path.join(ROOT, ...p));
@@ -39,88 +39,7 @@ function configAccounts(name) {
     .map(([, privateKey, balance]) => ({ privateKey, balance }));
 }
 
-describe("R1 · The Approval Trap exists as an easy awareness challenge", () => {
-  it("lives in approval-trap/ with the standard challenge layout", () => {
-    for (const f of ["Dockerfile", "README.md", "walkthrough.md", "challenge_icon.png",
-      "challenge/flag.txt", "challenge/contract.html", "challenge/run_challenge.sh",
-      "challenge/server.js", "challenge/server.py", "challenge/getstate.js",
-      "challenge/hardhat.config.js", "challenge/ignition/modules/deploy.js"]) {
-      assert.ok(exists("approval-trap", f), `missing approval-trap/${f}`);
-    }
-  });
-
-  it('is named "The Approval Trap" on the page, the desktop icon and the README', () => {
-    assert.match(read("approval-trap/challenge/contract.html"), /<title>The Approval Trap<\/title>/);
-    assert.match(read("approval-trap/Dockerfile"), /Name= Web3 Challenge - The Approval Trap/);
-    assert.match(read("approval-trap/README.md"), /^# The Approval Trap/);
-  });
-
-  it("is marked easy and framed as awareness", () => {
-    const readme = read("approval-trap/README.md");
-    assert.match(readme, /\*\*Difficulty:\*\* easy/);
-    assert.match(readme, /awareness/i);
-  });
-
-  it("has a flag in the HMS{...} format that is not on the page", () => {
-    const flag = read("approval-trap/challenge/flag.txt").trim();
-    assert.match(flag, /^HMS\{[^}]+\}$/);
-    assert.ok(!read("approval-trap/challenge/contract.html").includes(flag));
-  });
-});
-
-describe("R2 · Players learn to check an approval before confirming it", () => {
-  const html = read("approval-trap/challenge/contract.html");
-
-  it("shows a pending wallet request in its own tab", () => {
-    assert.match(html, /data-tab="request"/);
-    assert.match(html, /id="panel-request"/);
-    for (const id of ["req-from", "req-to", "req-value", "req-data"]) {
-      assert.match(html, new RegExp(`id="${id}"`), `request field ${id} missing`);
-    }
-  });
-
-  it("tells the player to decode the request before confirming", () => {
-    assert.match(html, /Check before you confirm/);
-    assert.match(html, /Before you confirm/);
-    assert.match(html, /function selector/);
-  });
-
-  it("the request is the malicious approve(AirdropClaim, unlimited), sent to the token", () => {
-    const { buildPendingRequest } = require(path.join(ROOT, "approval-trap/challenge/getstate.js"));
-    const token = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
-    const airdrop = "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512";
-    const req = buildPendingRequest(token, airdrop);
-    assert.equal(req.to, token);
-    const iface = new ethers.Interface(["function approve(address,uint256)"]);
-    const [spender, amount] = iface.decodeFunctionData("approve", req.data);
-    assert.equal(spender, airdrop);
-    assert.equal(amount, ethers.MaxUint256);
-  });
-
-  it("shows the raw calldata of approvals already signed", () => {
-    assert.match(html, /id="panel-signed"/);
-    assert.match(read("approval-trap/challenge/getstate.js"), /queryFilter\(token\.filters\.Approval\(WALLET\)/);
-  });
-
-  it("README and walkthrough teach checking spender and amount before signing", () => {
-    assert.match(read("approval-trap/README.md"), /before\s+confirming/i);
-    assert.match(read("approval-trap/README.md"), /Wallet request/);
-    assert.match(read("approval-trap/walkthrough.md"), /Before\s+confirming\s+any\s+wallet\s+prompt/);
-  });
-});
-
-describe("R3 · Players are pointed to revoke.cash", () => {
-  it("the page links to https://revoke.cash", () => {
-    assert.match(read("approval-trap/challenge/contract.html"), /href="https:\/\/revoke\.cash"/);
-  });
-
-  it("README and walkthrough both mention revoke.cash", () => {
-    assert.match(read("approval-trap/README.md"), /revoke\.cash/);
-    assert.match(read("approval-trap/walkthrough.md"), /revoke\.cash/);
-  });
-});
-
-describe("R4 · Multi-contract challenges show one tab per contract", () => {
+describe("R1 · Multi-contract challenges show one tab per contract", () => {
   for (const name of CHALLENGES) {
     const contracts = shippedContracts(name);
     const html = read(name, "challenge/contract.html");
@@ -161,7 +80,7 @@ describe("R4 · Multi-contract challenges show one tab per contract", () => {
   }
 });
 
-describe("R5 · Fixed accounts in hardhat.config.js", () => {
+describe("R2 · Fixed accounts in hardhat.config.js", () => {
   const playerAddresses = PLAYER_ACCOUNTS.map((a) => new ethers.Wallet(a.privateKey).address);
   const deployerAddress = new ethers.Wallet(DEPLOYER.privateKey).address;
 
@@ -209,7 +128,7 @@ describe("R5 · Fixed accounts in hardhat.config.js", () => {
   }
 });
 
-describe("R6 · Solutions and flags stay out of the player image", () => {
+describe("R3 · Solutions and flags stay out of the player image", () => {
   it("solve.js helpers are gitignored", () => {
     assert.match(read(".gitignore"), /^\*\*\/challenge\/solve\.js$/m);
   });

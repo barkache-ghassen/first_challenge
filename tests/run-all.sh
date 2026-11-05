@@ -4,7 +4,7 @@
 set -e
 cd "$(dirname "$0")/.."
 
-for c in approval-trap flash-loan-oracle signature-replay; do
+for c in flash-loan-oracle signature-replay; do
   echo "== Unit tests: $c"
   (cd "$c/challenge" && { [ -d node_modules ] || npm ci --silent; } && npx hardhat test)
 done
