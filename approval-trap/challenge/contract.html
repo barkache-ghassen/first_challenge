@@ -66,6 +66,11 @@
     .copyable { cursor: pointer; }
     .promo { background: linear-gradient(135deg, #fff4d6, #ffe0f0); border-radius: 12px; padding: 16px 20px; margin-bottom: 16px; }
     .tx { border: 1px solid #e3e7eb; border-radius: 10px; padding: 14px 18px; margin-bottom: 14px; }
+    .wallet-prompt { border: 2px solid #f5c518; }
+    .prompt-actions { display: flex; gap: 12px; margin-top: 16px; }
+    .fake-btn { flex: 1; text-align: center; padding: 10px 18px; border-radius: 8px; font-weight: 700; opacity: .6; cursor: not-allowed; }
+    .fake-btn.reject { border: 1px solid #ccc; color: #333; }
+    .fake-btn.confirm { background: #007bff; color: #fff; }
 
     /* Tabs: one per contract so multi-contract challenges stay readable. */
     .tabs { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -102,6 +107,7 @@
 
   <nav class="tabs" id="tabs">
     <button class="tab" data-tab="overview">Overview</button>
+    <button class="tab" data-tab="request">Wallet request <span class="kind">1 pending</span></button>
     <button class="tab" data-tab="signed">What you signed</button>
     <button class="tab" data-tab="HamonisToken">HamonisToken <span class="kind">contract</span></button>
     <button class="tab" data-tab="SwapRouter">SwapRouter <span class="kind">contract</span></button>
@@ -113,14 +119,15 @@
   <section class="panel" id="panel-overview">
     <div class="card">
       <h2>The Approval Trap</h2>
-      <p>Last week your wallet (<strong>Account&nbsp;#0</strong>) clicked a "free HMS airdrop" link and confirmed a transaction without reading it. Your 1,000 HMS are still there, for now.</p>
-      <p>That transaction was an <strong>approval</strong>. It didn't move any tokens, which is why nothing looked wrong. Instead it gave another contract permission to move your tokens whenever it likes. Approvals stay active until you change them.</p>
+      <p>Your wallet (<strong>Account&nbsp;#0</strong>) holds 1,000 HMS. The "HMS Community Airdrop" site promises a free 500 HMS bonus, and its <strong>Claim</strong> button has put a request in your wallet waiting for you to confirm.</p>
+      <p>Last week you clicked the same site and confirmed without reading. That transaction was an <strong>approval</strong>. It didn't move any tokens, which is why nothing looked wrong. Instead it gave another contract permission to move your tokens whenever it likes. Approvals stay active until you change them.</p>
       <ol>
-        <li>Open <strong>What you signed</strong> and work out what each transaction actually did: which contract, which function, which spender, how much.</li>
+        <li><strong>Check before you confirm.</strong> Open <strong>Wallet request</strong> and decode it: which contract it calls, which function, which spender, how much. Don't send it.</li>
+        <li>Open <strong>What you signed</strong> and decode what you already confirmed in the past.</li>
         <li>Read the contract tabs to find out who those spenders are.</li>
         <li>Revoke the dangerous approval from Account&nbsp;#0. Keep your HMS and leave your DEX approval as it is; you still use that one.</li>
       </ol>
-      <p>Careful: anything that calls <code>transferFrom</code> on your wallet while the bad approval is live can empty it. If your HMS are taken, the challenge has to be restarted.</p>
+      <p>Careful: confirming the pending request hands the approval straight back. Anything that calls <code>transferFrom</code> on your wallet while the bad approval is live can empty it. If your HMS are taken, the challenge has to be restarted.</p>
     </div>
 
     <div class="row">
@@ -144,6 +151,36 @@
           <li><strong>Why</strong>: a claim or "verification" never needs to spend your tokens.</li>
         </ul>
         <p>To review and cancel approvals you already gave, use <a href="https://revoke.cash" target="_blank" rel="noopener">revoke.cash</a>. It lists every spender your address has approved, on every token, and sends the revoke transaction for you. Do it after any suspicious click, and every so often anyway.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Wallet request -->
+  <section class="panel" id="panel-request">
+    <div class="row">
+      <div class="card wallet-prompt">
+        <p class="label">Request from <strong id="req-site">HMS Community Airdrop</strong></p>
+        <h2 id="req-label">Claim 500 HMS bonus</h2>
+        <p class="label">The site says this transaction claims your bonus. This is everything your wallet is actually asked to send:</p>
+        <p><span class="label">From</span><br><span id="req-from" class="mono copyable">Loading...</span></p>
+        <p><span class="label">To</span><br><span id="req-to" class="mono copyable">Loading...</span></p>
+        <p><span class="label">Value</span><br><span id="req-value" class="mono">0 ETH</span></p>
+        <p class="label">Data</p>
+        <pre id="req-data" class="light-pre copyable">Loading...</pre>
+        <div class="prompt-actions">
+          <span class="fake-btn reject">Reject</span>
+          <span class="fake-btn confirm">Confirm</span>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Before you confirm</h2>
+        <ol>
+          <li>Who is <strong>To</strong>? Compare it with the addresses in the contract tabs. Is it the airdrop, or something else?</li>
+          <li>The first 4 bytes of <strong>Data</strong> are the function selector. Which function is it?</li>
+          <li>The rest is the arguments, 32 bytes each. Who gets permission, and for how much?</li>
+          <li>Does a "claim" need any of that?</li>
+        </ol>
+        <p class="label">These buttons do nothing; this page can't sign. Confirming means sending this exact transaction from Account&nbsp;#0. Rejecting means simply not sending it.</p>
       </div>
     </div>
   </section>
@@ -335,6 +372,15 @@
         setText("network", data.network || "http://127.0.0.1:8545");
         setText("chainId", data.chainId || 31337);
         renderSigned(data.signed || []);
+        if (data.pendingRequest) {
+          const req = data.pendingRequest;
+          setText("req-site", req.site);
+          setText("req-label", req.label);
+          setText("req-from", req.from);
+          setText("req-to", req.to);
+          setText("req-value", req.value + " ETH");
+          setText("req-data", req.data);
+        }
 
         const badge = document.getElementById("solvedBadge");
         const flagBox = document.getElementById("flagBox");

@@ -7,6 +7,7 @@ const TOKEN_ABI = [
   "function balanceOf(address) view returns (uint256)",
   "function allowance(address owner, address spender) view returns (uint256)",
 ];
+const APPROVE = new ethers.Interface(["function approve(address spender, uint256 amount)"]);
 
 // The player's wallet (account #0) and what it held when the challenge started.
 const WALLET = "0xbDA5747bFD65F08deb54cb465eB87D40e51B197E";
@@ -19,6 +20,19 @@ function isSolved({ balance, airdropAllowance, routerAllowance }) {
   return airdropAllowance === 0n
     && balance >= START_BALANCE
     && routerAllowance === ROUTER_ALLOWANCE;
+}
+
+// The airdrop site's "Claim 500 HMS" button asks the wallet to confirm this.
+// It is the same unlimited approval again; the player should decode it and not send it.
+function buildPendingRequest(tokenAddress, airdropAddress) {
+  return {
+    site: "HMS Community Airdrop",
+    label: "Claim 500 HMS bonus",
+    from: WALLET,
+    to: tokenAddress,
+    value: "0",
+    data: APPROVE.encodeFunctionData("approve", [airdropAddress, ethers.MaxUint256]),
+  };
 }
 
 function formatAmount(value) {
@@ -59,6 +73,8 @@ async function getState() {
     return { hash: tx.hash, block: tx.blockNumber, from: tx.from, to: tx.to, data: tx.data };
   }));
 
+  const pendingRequest = buildPendingRequest(tokenAddress, airdropAddress);
+
   return {
     wallet: WALLET,
     tokenAddress,
@@ -68,6 +84,7 @@ async function getState() {
     airdropAllowance: formatAmount(airdropAllowance),
     routerAllowance: formatAmount(routerAllowance),
     drained: balance < START_BALANCE,
+    pendingRequest,
     signed,
     solved: isSolved({ balance, airdropAllowance, routerAllowance }),
     network: rpcUrl,
@@ -77,3 +94,4 @@ async function getState() {
 
 module.exports = getState;
 module.exports.isSolved = isSolved;
+module.exports.buildPendingRequest = buildPendingRequest;

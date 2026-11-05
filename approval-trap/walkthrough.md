@@ -13,8 +13,15 @@ This note is for reviewers. It is not copied into the challenge image.
   1. `approve(SwapRouter, 50 HMS)`, a bounded approval for a DEX it uses.
   2. `approve(AirdropClaim, type(uint256).max)`, from the phishing "airdrop".
 - `AirdropClaim.collector` is `0x…bad1`, an address nobody holds a key for.
+- The page's **Wallet request** tab shows one pending request from the airdrop
+  site, labelled "Claim 500 HMS bonus". It is built by `buildPendingRequest()`
+  in `getstate.js`: `to` = the HMS token, `data` =
+  `approve(AirdropClaim, type(uint256).max)`. The page can't sign anything;
+  "confirming" it means sending that exact transaction from Account #0.
 
-The win check lives in `getstate.js` (`isSolved`) and reads on-chain state only.
+The win check lives in `getstate.js` (`isSolved`) and reads on-chain state
+only, live on every request. Nothing latches, so re-approving the airdrop
+after solving un-solves it.
 
 ## The vulnerability
 
@@ -30,6 +37,12 @@ collector. `sweep(wallet)` lets the attacker do it whenever they like. The
 advertised 500 HMS bonus is never paid.
 
 ## Solve
+
+First, check the pending request before confirming it. `To` is the token
+(`0x5FbD…0aa3`), not the airdrop, and its data decodes exactly like the
+second signed transaction below. It is a request for an unlimited approval,
+not a claim, so the right move is to reject it, which means simply not
+sending it.
 
 Decode the second signed transaction:
 
@@ -63,8 +76,32 @@ Ways to fail:
 
 - Calling `claim()` drains the wallet. The page shows "Wallet drained" and the
   challenge has to be restarted.
+- Confirming the pending request re-grants the unlimited approval, so the
+  check fails again until it's revoked.
 - Revoking the router as well fails the check. The lesson is to identify the
   bad spender, not to panic-revoke everything.
+
+## Testing it locally
+
+Unit tests (24 cases, no servers needed):
+
+```bash
+cd approval-trap/challenge && npm ci && npx hardhat test
+```
+
+To play it in a browser, start everything with `./run_challenge.sh` from
+`approval-trap/challenge` (it needs a fresh `ignition/deployments`, so
+`rm -rf ignition/deployments` first on a re-run), then open
+http://localhost:8000. Send transactions from a second terminal with
+`npx hardhat console --network localhost`. Its default signer is Account #0.
+
+```js
+const token = await ethers.getContractAt("HamonisToken", "0x5FbDB2315678afecb367f032d93F642f64180aa3")
+await token.approve("0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512", 0)   // solve
+```
+
+The repo-wide requirement and end-to-end suites are described in
+[../TESTING.md](../TESTING.md).
 
 ## What players should take away
 
