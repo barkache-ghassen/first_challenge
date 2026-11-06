@@ -4,57 +4,57 @@
 
 ## Problem statement
 
-An awareness challenge with two habits to learn: **check an approval before
-confirming it**, and **revoke the ones you shouldn't have given**, for example
-with [revoke.cash](https://revoke.cash).
+An awareness challenge that walks the player through a real phishing pattern:
+a "free airdrop" that asks for an **approval**, and the clean-up afterwards
+with a revoke tool like [revoke.cash](https://revoke.cash).
 
-The player's wallet (Account #0, `0xbDA5…197E`) holds **1,000 HMS**.
+The player's wallet (Account #0, `0xbDA5…197E`) holds **1,000 HMS**. It starts
+with one approval: a bounded **50 HMS** to `SwapRouter`, the DEX the player
+actually uses.
 
-- **A request is waiting to be confirmed.** The "HMS Community Airdrop" site's
-  *Claim 500 HMS bonus* button has put a transaction in the wallet. The
-  **Wallet request** tab shows it the way a wallet does: From, To, Value and
-  raw Data. It claims to be a bonus claim. Decoded, it is
-  `approve(AirdropClaim, unlimited)`, sent to the HMS token.
-- **The wallet already fell for it once.** Before the challenge starts it
-  signed two approvals on the HMS token. The **What you signed** tab shows
-  their raw calldata:
-  - **50 HMS** to `SwapRouter`, the DEX the player actually uses.
-  - **Unlimited** HMS to `AirdropClaim`, the same fake airdrop.
+The page plays out the attack in three steps, each with its own tab:
 
-No tokens have moved yet, which is the point: an approval looks harmless when
-you sign it. Each contract (`HamonisToken`, `SwapRouter`, `AirdropClaim`) has
-its own tab with its address, live allowance and source. The overview points
-to revoke.cash for real-world clean-up.
+1. **Airdrop.** "Congratulations! Your wallet is eligible for 500 HMS." The
+   player clicks **Claim 500 HMS**.
+2. **Wallet request: Confirm.** The wallet prompt shows what will really be
+   sent: From, To, Value and raw Data. It's not a claim. It's
+   `approve(AirdropClaim, unlimited)`, sent to the HMS token. The player
+   clicks **Confirm**, as most people do without reading. No bonus arrives,
+   and the page shows that the player just approved an **unlimited** amount.
+3. **Revoke before the funds are stolen.** A red banner starts a
+   **countdown** (2 minutes by default). When it reaches zero, the airdrop
+   owner's drainer bot calls `sweep()` and takes every HMS. The player opens
+   the **Approvals** tab (a revoke.cash-style list of spenders with their
+   allowance and risk) and revokes the dangerous approval in time.
 
-**Objective:** don't confirm the pending request, and revoke the existing
-dangerous approval without losing any HMS and without touching the legitimate
-DEX approval. The solve API returns the flag while all of these hold:
+**Objective:** the solve API returns the flag once all of these hold:
 
-- `allowance(wallet, AirdropClaim) == 0`
-- `balanceOf(wallet) >= 1000 HMS`
-- `allowance(wallet, SwapRouter) == 50 HMS`
+- the airdrop approval was given (step 2 happened),
+- `allowance(wallet, AirdropClaim) == 0` (it was revoked),
+- `balanceOf(wallet) >= 1000 HMS` (the drainer didn't get there first),
+- `allowance(wallet, SwapRouter) == 50 HMS` (the legitimate approval was left alone).
 
 **Ways to lose:**
 
-- Calling the airdrop's `claim()` sweeps the whole balance to the attacker and
-  pays no bonus. The page says "Wallet drained" and the challenge has to be
+- The countdown runs out: the wallet is swept and the challenge has to be
   restarted.
-- Confirming the pending request, even after revoking, hands the unlimited
-  approval straight back, so the challenge is no longer solved.
-- Revoking every approval in a panic fails too: the router approval must stay.
+- The player revokes every approval in a panic: the router approval must stay.
+
+The player can revoke from the page's Approvals tab, or from their own tools
+by calling `approve(AirdropClaim, 0)` on the token from Account #0. Each
+contract (`HamonisToken`, `SwapRouter`, `AirdropClaim`) also has its own tab
+with its address, live allowance and source.
 
 ## How to solve it
 
-1. Open **Wallet request**. `To` is the HMS token, not the airdrop. The data
+1. **1 · Airdrop**: click **Claim 500 HMS**.
+2. **2 · Wallet request**: read the request. `To` is the HMS token. The data
    starts with selector `0x095ea7b3`, which is `approve(address,uint256)`. The
-   arguments are the `AirdropClaim` address and `0xfff…fff`
-   (`type(uint256).max`, unlimited). A claim never needs that, so don't send it.
-2. Open **What you signed**. Both past transactions are the same `approve`
-   call. The first gives `SwapRouter` `0x2b5e3af16b1880000` (50e18). The
-   second gives `AirdropClaim` unlimited.
-3. Read `AirdropClaim.sol`. `claim()` and `sweep()` both `transferFrom` your
-   whole balance to `collector`. The bonus is never paid.
-4. From Account #0, call `HamonisToken.approve(<AirdropClaim>, 0)`.
+   arguments are the `AirdropClaim` address and `0xfff…fff` (unlimited). Click
+   **Confirm**. The countdown starts.
+3. **3 · Approvals**: click **Revoke** on `AirdropClaim` (High: unlimited)
+   before the countdown ends. Leave `SwapRouter` alone. The banner turns
+   green and the flag appears on the Overview tab.
 
 Full solve, the real-world lesson and how to test locally are in
 [walkthrough.md](walkthrough.md).
