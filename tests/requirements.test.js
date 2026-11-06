@@ -68,24 +68,37 @@ describe("R1 · The Approval Trap exists as an easy awareness challenge", () => 
   });
 });
 
-describe("R2 · Players learn to check an approval before confirming it", () => {
+describe("R2 · The page shows every step: airdrop, confirm the approval, revoke before funds are stolen", () => {
   const html = read("approval-trap/challenge/contract.html");
+  const server = read("approval-trap/challenge/server.js");
+  const getstate = read("approval-trap/challenge/getstate.js");
 
-  it("shows a pending wallet request in its own tab", () => {
-    assert.match(html, /data-tab="request"/);
-    assert.match(html, /id="panel-request"/);
-    for (const id of ["req-from", "req-to", "req-value", "req-data"]) {
+  it("has numbered tabs for the three steps, in order", () => {
+    const order = ["airdrop", "request", "approvals"].map((t) => html.indexOf(`data-tab="${t}"`));
+    assert.ok(order.every((n) => n > 0), "a step tab is missing");
+    assert.deepEqual([...order].sort((a, b) => a - b), order, "step tabs out of order");
+    assert.match(html, />1 · Airdrop</);
+    assert.match(html, />2 · Wallet request/);
+    assert.match(html, />3 · Approvals</);
+  });
+
+  it("step 1: the airdrop offer has a working Claim button that opens the wallet request", () => {
+    assert.match(html, /id="claim-button"/);
+    assert.match(html, /getElementById\("claim-button"\)\.addEventListener\("click", \(\) => showTab\("request"\)\)/);
+  });
+
+  it("step 2: the wallet request shows From/To/Value/Data with working Confirm and Reject", () => {
+    for (const id of ["req-from", "req-to", "req-value", "req-data", "confirm-button", "reject-button"]) {
       assert.match(html, new RegExp(`id="${id}"`), `request field ${id} missing`);
     }
+    assert.ok(!/fake-btn/.test(html), "buttons are still fake");
+    assert.match(html, /post\("\/wallet\/confirm"\)/);
+    assert.match(html, /post\("\/wallet\/reject"\)/);
+    assert.match(server, /app\.post\("\/wallet\/confirm"/);
+    assert.match(server, /app\.post\("\/wallet\/reject"/);
   });
 
-  it("tells the player to decode the request before confirming", () => {
-    assert.match(html, /Check before you confirm/);
-    assert.match(html, /Before you confirm/);
-    assert.match(html, /function selector/);
-  });
-
-  it("the request is the malicious approve(AirdropClaim, unlimited), sent to the token", () => {
+  it("step 2: the request is the malicious approve(AirdropClaim, unlimited), sent to the token", () => {
     const { buildPendingRequest } = require(path.join(ROOT, "approval-trap/challenge/getstate.js"));
     const token = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
     const airdrop = "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512";
@@ -97,15 +110,56 @@ describe("R2 · Players learn to check an approval before confirming it", () => 
     assert.equal(amount, ethers.MaxUint256);
   });
 
-  it("shows the raw calldata of approvals already signed", () => {
-    assert.match(html, /id="panel-signed"/);
-    assert.match(read("approval-trap/challenge/getstate.js"), /queryFilter\(token\.filters\.Approval\(WALLET\)/);
+  it("step 2: after confirming, the page says the player approved an UNLIMITED amount", () => {
+    assert.match(html, /You approved <u>UNLIMITED<\/u> HMS to AirdropClaim/);
+    assert.match(html, /permission to spend an <strong>unlimited<\/strong> amount of your HMS/);
   });
 
-  it("README and walkthrough teach checking spender and amount before signing", () => {
-    assert.match(read("approval-trap/README.md"), /before\s+confirming/i);
-    assert.match(read("approval-trap/README.md"), /Wallet request/);
-    assert.match(read("approval-trap/walkthrough.md"), /Before\s+confirming\s+any\s+wallet\s+prompt/);
+  it("step 3: a countdown shows when the drainer will strike", () => {
+    assert.match(getstate, /SWEEP_DELAY_SECONDS/);
+    assert.match(html, /will sweep your wallet in <span class=\\"countdown\\">/);
+    assert.match(html, /setInterval\(renderAlert, 1000\)/);
+  });
+
+  it("step 3: a drainer bot really sweeps the wallet when the countdown ends", () => {
+    assert.match(server, /async function drainerTick\(\)/);
+    assert.match(server, /setInterval\(drainerTick, 1000\)/);
+    assert.match(server, /encodeFunctionData\("sweep"/);
+  });
+
+  it("step 3: the Approvals tab lists spenders with risk and working Revoke buttons", () => {
+    assert.match(html, /id="panel-approvals"/);
+    assert.match(html, /id="approvals-body"/);
+    assert.match(html, /High: unlimited/);
+    assert.match(html, /post\("\/wallet\/revoke", \{ spender: a\.spender \}\)/);
+    assert.match(server, /app\.post\("\/wallet\/revoke"/);
+  });
+
+  it("the win condition requires the approval to have been given, then revoked", () => {
+    const { isSolved } = require(path.join(ROOT, "approval-trap/challenge/getstate.js"));
+    const ok = { approvedAirdrop: true, balance: ethers.parseEther("1000"), airdropAllowance: 0n, routerAllowance: ethers.parseEther("50") };
+    assert.equal(isSolved(ok), true);
+    assert.equal(isSolved({ ...ok, approvedAirdrop: false }), false);
+    assert.equal(isSolved({ ...ok, airdropAllowance: ethers.MaxUint256 }), false);
+    assert.equal(isSolved({ ...ok, balance: 0n }), false);
+    assert.equal(isSolved({ ...ok, routerAllowance: 0n }), false);
+  });
+
+  it("still teaches reading the request before confirming", () => {
+    assert.match(html, /Before you confirm/);
+    assert.match(html, /function selector/);
+    assert.match(html, /id="panel-signed"/);
+  });
+
+  it("README and walkthrough describe the three steps", () => {
+    const readme = read("approval-trap/README.md");
+    const walkthrough = read("approval-trap/walkthrough.md");
+    for (const doc of [readme, walkthrough]) {
+      assert.match(doc, /Airdrop/);
+      assert.match(doc, /Confirm/);
+      assert.match(doc, /Revoke/i);
+      assert.match(doc, /countdown/i);
+    }
   });
 });
 

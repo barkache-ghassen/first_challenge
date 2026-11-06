@@ -14,16 +14,20 @@ const WALLET = "0xbDA5747bFD65F08deb54cb465eB87D40e51B197E";
 const START_BALANCE = ethers.parseEther("1000");
 const ROUTER_ALLOWANCE = ethers.parseEther("50");
 
-// Solved when the drainer's approval is revoked, no HMS was lost, and the
-// legitimate DEX approval was left as it was.
-function isSolved({ balance, airdropAllowance, routerAllowance }) {
-  return airdropAllowance === 0n
+// How long the drainer bot waits after the airdrop approval before it sweeps the wallet.
+const SWEEP_DELAY_SECONDS = Number(process.env.SWEEP_DELAY_SECONDS || 120);
+
+// Solved when the player confirmed the airdrop approval, then revoked it before
+// the drainer struck, kept every HMS, and left the legitimate DEX approval alone.
+function isSolved({ approvedAirdrop, balance, airdropAllowance, routerAllowance }) {
+  return approvedAirdrop
+    && airdropAllowance === 0n
     && balance >= START_BALANCE
     && routerAllowance === ROUTER_ALLOWANCE;
 }
 
-// The airdrop site's "Claim 500 HMS" button asks the wallet to confirm this.
-// It is the same unlimited approval again; the player should decode it and not send it.
+// What the airdrop site's "Claim 500 HMS" button asks the wallet to confirm:
+// not a claim at all, but an unlimited HMS approval for the airdrop contract.
 function buildPendingRequest(tokenAddress, airdropAddress) {
   return {
     site: "HMS Community Airdrop",
@@ -39,9 +43,7 @@ function formatAmount(value) {
   return value === ethers.MaxUint256 ? "unlimited" : ethers.formatEther(value);
 }
 
-async function getState() {
-  const rpcUrl = process.env.RPC_URL || "http://127.0.0.1:8545";
-  const provider = new ethers.JsonRpcProvider(rpcUrl);
+function readDeployment() {
   const deploymentsPath = path.join(
     __dirname,
     "ignition",
@@ -56,6 +58,13 @@ async function getState() {
   if (!tokenAddress || !routerAddress || !airdropAddress) {
     throw new Error("Approval trap deployment is missing");
   }
+  return { tokenAddress, routerAddress, airdropAddress };
+}
+
+async function getState() {
+  const rpcUrl = process.env.RPC_URL || "http://127.0.0.1:8545";
+  const provider = new ethers.JsonRpcProvider(rpcUrl);
+  const { tokenAddress, routerAddress, airdropAddress } = readDeployment();
 
   const token = new ethers.Contract(tokenAddress, TOKEN_ABI, provider);
   const [balance, airdropAllowance, routerAllowance, approvalLogs, network] = await Promise.all([
@@ -73,7 +82,16 @@ async function getState() {
     return { hash: tx.hash, block: tx.blockNumber, from: tx.from, to: tx.to, data: tx.data };
   }));
 
-  const pendingRequest = buildPendingRequest(tokenAddress, airdropAddress);
+  const airdropLogs = approvalLogs.filter((log) => log.args.spender === airdropAddress);
+  const approvedAirdrop = airdropLogs.some((log) => log.args.value > 0n);
+
+  // While the airdrop approval is live, the drainer sweeps SWEEP_DELAY_SECONDS
+  // after the approval that set it.
+  let sweepAt = null;
+  if (airdropAllowance > 0n && airdropLogs.length > 0) {
+    const block = await provider.getBlock(airdropLogs[airdropLogs.length - 1].blockNumber);
+    sweepAt = block.timestamp + SWEEP_DELAY_SECONDS;
+  }
 
   return {
     wallet: WALLET,
@@ -83,10 +101,18 @@ async function getState() {
     balance: ethers.formatEther(balance),
     airdropAllowance: formatAmount(airdropAllowance),
     routerAllowance: formatAmount(routerAllowance),
+    // Every spender the wallet has approved, like revoke.cash lists them.
+    approvals: [
+      { name: "AirdropClaim", spender: airdropAddress, amount: formatAmount(airdropAllowance) },
+      { name: "SwapRouter", spender: routerAddress, amount: formatAmount(routerAllowance) },
+    ],
+    approvedAirdrop,
+    sweepAt,
+    secondsLeft: sweepAt === null ? null : Math.max(0, sweepAt - Math.floor(Date.now() / 1000)),
     drained: balance < START_BALANCE,
-    pendingRequest,
+    pendingRequest: buildPendingRequest(tokenAddress, airdropAddress),
     signed,
-    solved: isSolved({ balance, airdropAllowance, routerAllowance }),
+    solved: isSolved({ approvedAirdrop, balance, airdropAllowance, routerAllowance }),
     network: rpcUrl,
     chainId: Number(network.chainId),
   };
@@ -95,3 +121,5 @@ async function getState() {
 module.exports = getState;
 module.exports.isSolved = isSolved;
 module.exports.buildPendingRequest = buildPendingRequest;
+module.exports.readDeployment = readDeployment;
+module.exports.WALLET = WALLET;
