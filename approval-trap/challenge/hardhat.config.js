@@ -28,9 +28,6 @@ module.exports = {
           balance: "12500000000000000000",
         },
       ],
-      // Keep block timestamps on the real clock (no +1s per block within the
-      // same second), so the drainer countdown matches wall time.
-      allowBlocksWithSameTimestamp: true,
     },
     localhost: {
       url: process.env.RPC_URL || "http://127.0.0.1:8545",

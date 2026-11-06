@@ -68,31 +68,9 @@
     .tx { border: 1px solid #e3e7eb; border-radius: 10px; padding: 14px 18px; margin-bottom: 14px; }
     .wallet-prompt { border: 2px solid #f5c518; }
     .prompt-actions { display: flex; gap: 12px; margin-top: 16px; }
-    .prompt-actions button { flex: 1; margin: 0; }
-    button.secondary { color: #333; background: #fff; border: 1px solid #ccc; }
-    button.secondary:hover { background: #f0f3f6; }
-    button.danger { background: #dc3545; }
-    button.danger:hover { background: #a71d2a; }
-    button:disabled { opacity: .5; cursor: not-allowed; }
-    .notice { border-radius: 10px; padding: 14px 18px; margin-top: 14px; display: none; }
-    .notice.show { display: block; }
-    .notice.good { background: #e6fff0; border: 1px solid #28a745; color: #0f5132; }
-    .notice.bad { background: #fff0f0; border: 1px solid #dc3545; color: #842029; }
-    .alert { display: none; border-radius: 12px; padding: 18px 24px; font-weight: 700; }
-    .alert.show { display: block; }
-    .alert.danger { background: #dc3545; color: #fff; }
-    .alert.danger a { color: #fff; }
-    .alert.done { background: #28a745; color: #fff; }
-    .alert .countdown { font-family: Consolas, monospace; font-size: 1.6rem; }
-    .claim-hero { text-align: center; padding: 28px; border-radius: 12px; background: linear-gradient(135deg, #fff4d6, #ffe0f0); }
-    .claim-hero .big { font-size: 2.4rem; font-weight: 800; margin: 8px 0; }
-    table.approvals { width: 100%; border-collapse: collapse; }
-    table.approvals th, table.approvals td { text-align: left; padding: 12px 10px; border-bottom: 1px solid #e3e7eb; vertical-align: middle; }
-    table.approvals td button { margin: 0; }
-    .risk { display: inline-block; border-radius: 6px; padding: 2px 8px; font-size: .85em; font-weight: 700; }
-    .risk.high { background: #f8d7da; color: #842029; }
-    .risk.low { background: #e6fff0; color: #0f5132; }
-    .risk.none { background: #f0f3f6; color: #666; }
+    .fake-btn { flex: 1; text-align: center; padding: 10px 18px; border-radius: 8px; font-weight: 700; opacity: .6; cursor: not-allowed; }
+    .fake-btn.reject { border: 1px solid #ccc; color: #333; }
+    .fake-btn.confirm { background: #007bff; color: #fff; }
 
     /* Tabs: one per contract so multi-contract challenges stay readable. */
     .tabs { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -127,13 +105,9 @@
     </div>
   </div>
 
-  <div class="alert" id="alert"></div>
-
   <nav class="tabs" id="tabs">
     <button class="tab" data-tab="overview">Overview</button>
-    <button class="tab" data-tab="airdrop">1 · Airdrop</button>
-    <button class="tab" data-tab="request">2 · Wallet request <span class="kind" id="request-kind">1 pending</span></button>
-    <button class="tab" data-tab="approvals">3 · Approvals</button>
+    <button class="tab" data-tab="request">Wallet request <span class="kind">1 pending</span></button>
     <button class="tab" data-tab="signed">What you signed</button>
     <button class="tab" data-tab="HamonisToken">HamonisToken <span class="kind">contract</span></button>
     <button class="tab" data-tab="SwapRouter">SwapRouter <span class="kind">contract</span></button>
@@ -145,14 +119,15 @@
   <section class="panel" id="panel-overview">
     <div class="card">
       <h2>The Approval Trap</h2>
-      <p>Your wallet (<strong>Account&nbsp;#0</strong>) holds 1,000 HMS. You've just been told you're eligible for a free <strong>HMS Community Airdrop</strong>.</p>
+      <p>Your wallet (<strong>Account&nbsp;#0</strong>) holds 1,000 HMS. The "HMS Community Airdrop" site promises a free 500 HMS bonus, and its <strong>Claim</strong> button has put a request in your wallet waiting for you to confirm.</p>
+      <p>Last week you clicked the same site and confirmed without reading. That transaction was an <strong>approval</strong>. It didn't move any tokens, which is why nothing looked wrong. Instead it gave another contract permission to move your tokens whenever it likes. Approvals stay active until you change them.</p>
       <ol>
-        <li><strong>Airdrop.</strong> Open <strong>1 · Airdrop</strong> and click <strong>Claim</strong>.</li>
-        <li><strong>Confirm.</strong> Your wallet pops up a request in <strong>2 · Wallet request</strong>. Look at what it actually asks for, then confirm it, the way most people do without reading.</li>
-        <li><strong>Revoke before your funds are stolen.</strong> The "claim" was an <strong>unlimited approval</strong>: the airdrop contract can now take every HMS you hold. A drainer bot sweeps your wallet when the countdown hits zero. Open <strong>3 · Approvals</strong> and revoke the dangerous approval in time.</li>
+        <li><strong>Check before you confirm.</strong> Open <strong>Wallet request</strong> and decode it: which contract it calls, which function, which spender, how much. Don't send it.</li>
+        <li>Open <strong>What you signed</strong> and decode what you already confirmed in the past.</li>
+        <li>Read the contract tabs to find out who those spenders are.</li>
+        <li>Revoke the dangerous approval from Account&nbsp;#0. Keep your HMS and leave your DEX approval as it is; you still use that one.</li>
       </ol>
-      <p>Keep all 1,000 HMS, and leave your DEX approval (<code>SwapRouter</code>, 50 HMS) as it is: you still use it. You can also revoke from your own tools, for example <code>npx hardhat console --network localhost</code>, by calling <code>approve(spender, 0)</code> on the token from Account&nbsp;#0.</p>
-      <p>If the drainer gets there first, your HMS are gone and the challenge has to be restarted.</p>
+      <p>Careful: confirming the pending request hands the approval straight back. Anything that calls <code>transferFrom</code> on your wallet while the bad approval is live can empty it. If your HMS are taken, the challenge has to be restarted.</p>
     </div>
 
     <div class="row">
@@ -180,18 +155,6 @@
     </div>
   </section>
 
-  <!-- Airdrop -->
-  <section class="panel" id="panel-airdrop">
-    <div class="card claim-hero">
-      <p><strong>🎁 HMS Community Airdrop</strong></p>
-      <p>Congratulations! Your wallet is eligible for</p>
-      <p class="big">500 HMS</p>
-      <p class="label">Approve once to verify your wallet, then the bonus is yours.</p>
-      <button id="claim-button" type="button">Claim 500 HMS</button>
-      <p class="label" id="claim-note"></p>
-    </div>
-  </section>
-
   <!-- Wallet request -->
   <section class="panel" id="panel-request">
     <div class="row">
@@ -205,10 +168,9 @@
         <p class="label">Data</p>
         <pre id="req-data" class="light-pre copyable">Loading...</pre>
         <div class="prompt-actions">
-          <button type="button" class="secondary" id="reject-button">Reject</button>
-          <button type="button" id="confirm-button">Confirm</button>
+          <span class="fake-btn reject">Reject</span>
+          <span class="fake-btn confirm">Confirm</span>
         </div>
-        <div class="notice" id="request-notice"></div>
       </div>
       <div class="card">
         <h2>Before you confirm</h2>
@@ -218,21 +180,8 @@
           <li>The rest is the arguments, 32 bytes each. Who gets permission, and for how much?</li>
           <li>Does a "claim" need any of that?</li>
         </ol>
-        <p class="label">Confirm sends this exact transaction from Account&nbsp;#0. Reject sends nothing.</p>
+        <p class="label">These buttons do nothing; this page can't sign. Confirming means sending this exact transaction from Account&nbsp;#0. Rejecting means simply not sending it.</p>
       </div>
-    </div>
-  </section>
-
-  <!-- Approvals -->
-  <section class="panel" id="panel-approvals">
-    <div class="card">
-      <h2>Approvals for Account #0</h2>
-      <p class="label">Every contract your wallet has allowed to spend its HMS. This is what <a href="https://revoke.cash" target="_blank" rel="noopener">revoke.cash</a> shows you for a real address. Revoke what you don't trust; keep what you use.</p>
-      <table class="approvals">
-        <thead><tr><th>Token</th><th>Spender</th><th>Allowance</th><th>Risk</th><th></th></tr></thead>
-        <tbody id="approvals-body"><tr><td colspan="5">Loading...</td></tr></tbody>
-      </table>
-      <div class="notice" id="approvals-notice"></div>
     </div>
   </section>
 
@@ -286,12 +235,12 @@
       <div class="card">
         <div class="promo">
           <strong>🎁 HMS Community Airdrop</strong><br>
-          Approve once to verify your wallet and get a FREE 500 HMS bonus!
+          Approve once to verify your wallet, then call <code>claim()</code> for a FREE 500 HMS bonus!
         </div>
         <h2>AirdropClaim</h2>
         <p>Address<br><span id="airdropAddress" class="mono copyable">Loading...</span></p>
         <p>Your allowance to it: <span id="airdropAllowance" class="mono">Loading...</span> HMS</p>
-        <p class="label">Read the source before you trust the banner. Its owner runs the bot that calls <code>sweep()</code>.</p>
+        <p class="label">Read the source before you trust the banner.</p>
         <button type="button" class="abi-toggle" data-contract="AirdropClaim">Show ABI</button>
         <pre class="abi-box" data-contract="AirdropClaim" style="display:none">Loading ABI...</pre>
       </div>
@@ -337,8 +286,6 @@
     const API = new URLSearchParams(location.search).get("api") || "http://127.0.0.1:3000";
     const loadedSources = new Set();
     let signedKey = "";
-    let latest = null;
-    let fetchedAt = 0;
 
     function showTab(name) {
       if (!document.getElementById("panel-" + name)) name = "overview";
@@ -409,117 +356,6 @@
       });
     }
 
-    function shortAddr(a) { return a.slice(0, 6) + "…" + a.slice(-4); }
-
-    function notice(id, kind, html) {
-      const el = document.getElementById(id);
-      el.className = "notice show " + kind;
-      el.innerHTML = html;
-    }
-
-    function secondsLeft() {
-      if (!latest || latest.secondsLeft === null) return null;
-      return Math.max(0, latest.secondsLeft - Math.floor((Date.now() - fetchedAt) / 1000));
-    }
-
-    function renderAlert() {
-      const el = document.getElementById("alert");
-      if (!latest) return;
-      if (latest.solved) {
-        el.className = "alert show done";
-        el.textContent = "Approval revoked in time. Your 1,000 HMS are safe. Flag is on the Overview tab.";
-      } else if (latest.drained) {
-        el.className = "alert show danger";
-        el.textContent = "The drainer swept your wallet: your HMS are gone. Restart the challenge to try again.";
-      } else if (latest.sweepAt !== null) {
-        const left = secondsLeft();
-        const mm = String(Math.floor(left / 60)).padStart(2, "0");
-        const ss = String(left % 60).padStart(2, "0");
-        el.className = "alert show danger";
-        el.innerHTML = "⚠ You approved <u>UNLIMITED</u> HMS to AirdropClaim (" + shortAddr(latest.airdropAddress) + "). "
-          + "Its drainer will sweep your wallet in <span class=\"countdown\">" + mm + ":" + ss + "</span>. "
-          + "<a href=\"#approvals\" id=\"alert-link\">Revoke it now →</a>";
-        document.getElementById("alert-link").onclick = (e) => { e.preventDefault(); showTab("approvals"); };
-      } else {
-        el.className = "alert";
-      }
-    }
-
-    function renderRequest(data) {
-      const done = data.approvedAirdrop;
-      document.getElementById("confirm-button").disabled = done || data.drained;
-      document.getElementById("reject-button").disabled = done || data.drained;
-      setText("request-kind", done ? "confirmed" : "1 pending");
-      if (done && !document.getElementById("request-notice").classList.contains("bad")) {
-        notice("request-notice", "bad", "<strong>Confirmed.</strong> You didn't claim anything. You just gave AirdropClaim "
-          + "permission to spend an <strong>unlimited</strong> amount of your HMS (<code>approve(AirdropClaim, 2^256-1)</code>). "
-          + "No bonus arrived. Go to <strong>3 · Approvals</strong> and revoke it before the drainer strikes.");
-      }
-      document.getElementById("claim-button").disabled = done;
-      setText("claim-note", done ? "Already claimed… or so the site says. Check your approvals." : "");
-    }
-
-    function renderApprovals(data) {
-      const body = document.getElementById("approvals-body");
-      body.textContent = "";
-      for (const a of data.approvals) {
-        const tr = document.createElement("tr");
-        const risk = a.amount === "unlimited" ? ["high", "High: unlimited"] : a.amount === "0.0" ? ["none", "None"] : ["low", "Bounded"];
-        tr.innerHTML = "<td>HMS</td><td><strong></strong><br><span class=\"mono copyable\"></span></td>"
-          + "<td class=\"mono\"></td><td><span class=\"risk " + risk[0] + "\"></span></td><td></td>";
-        tr.children[1].children[0].textContent = a.name;
-        tr.children[1].children[2].textContent = a.spender;
-        tr.children[2].textContent = a.amount === "unlimited" ? "Unlimited" : a.amount + " HMS";
-        tr.children[3].children[0].textContent = risk[1];
-        const btn = document.createElement("button");
-        btn.type = "button";
-        btn.className = "danger";
-        btn.textContent = "Revoke";
-        btn.disabled = a.amount === "0.0" || data.drained;
-        btn.onclick = () => revoke(a);
-        tr.children[4].appendChild(btn);
-        body.appendChild(tr);
-      }
-    }
-
-    async function post(path, body) {
-      const res = await fetch(API + path, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body || {}),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "request failed");
-      return json;
-    }
-
-    async function confirmRequest() {
-      document.getElementById("confirm-button").disabled = true;
-      try {
-        await post("/wallet/confirm");
-        await refresh();
-      } catch (err) {
-        notice("request-notice", "bad", "Transaction failed: " + err.message);
-      }
-    }
-
-    function rejectRequest() {
-      post("/wallet/reject").catch(() => {});
-      notice("request-notice", "good", "<strong>Rejected.</strong> In real life that's the right call: a claim never needs "
-        + "permission to spend your tokens. For this challenge, click <strong>Confirm</strong> to see what happens to people who don't check.");
-    }
-
-    async function revoke(a) {
-      if (a.name === "SwapRouter" && !window.confirm("SwapRouter is the DEX you use. Revoke it anyway?")) return;
-      try {
-        await post("/wallet/revoke", { spender: a.spender });
-        notice("approvals-notice", "good", "Revoked " + a.name + ": <code>approve(" + shortAddr(a.spender) + ", 0)</code> sent from Account #0.");
-        await refresh();
-      } catch (err) {
-        notice("approvals-notice", "bad", "Revoke failed: " + err.message);
-      }
-    }
-
     async function refresh() {
       try {
         const res = await fetch(API + "/status");
@@ -535,12 +371,7 @@
         setText("airdropAllowance", data.airdropAllowance);
         setText("network", data.network || "http://127.0.0.1:8545");
         setText("chainId", data.chainId || 31337);
-        latest = data;
-        fetchedAt = Date.now();
         renderSigned(data.signed || []);
-        renderApprovals(data);
-        renderRequest(data);
-        renderAlert();
         if (data.pendingRequest) {
           const req = data.pendingRequest;
           setText("req-site", req.site);
@@ -597,9 +428,6 @@
     });
 
     document.getElementById("refresh-button").addEventListener("click", refresh);
-    document.getElementById("claim-button").addEventListener("click", () => showTab("request"));
-    document.getElementById("confirm-button").addEventListener("click", confirmRequest);
-    document.getElementById("reject-button").addEventListener("click", rejectRequest);
 
     document.querySelectorAll(".pk-toggle").forEach((toggle) => {
       toggle.addEventListener("click", () => {
@@ -618,7 +446,6 @@
     showTab(location.hash.slice(1) || "overview");
     refresh();
     setInterval(refresh, 3000);
-    setInterval(renderAlert, 1000);
   </script>
 </body>
 </html>

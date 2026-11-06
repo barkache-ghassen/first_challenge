@@ -8,7 +8,7 @@ const WALLET = "0xbDA5747bFD65F08deb54cb465eB87D40e51B197E";
 const DEPLOYER = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
 const HMS = (n) => ethers.parseEther(String(n));
 
-// Mirrors ignition/modules/deploy.js: #4 deploys and owns the drainer, #0 is the player's wallet.
+// Mirrors ignition/modules/deploy.js: #4 deploys, #0 is the player's wallet.
 async function deployFixture() {
   const signers = await ethers.getSigners();
   const wallet = signers[0];
@@ -21,21 +21,19 @@ async function deployFixture() {
 
   await token.connect(deployer).transfer(wallet, HMS(1000));
   await token.connect(wallet).approve(router, HMS(50));
+  await token.connect(wallet).approve(airdrop, ethers.MaxUint256);
   return { token, router, airdrop, wallet, deployer, other };
 }
 
-// The same check getstate.js runs, including "did the player ever confirm the airdrop approval".
 async function solved({ token, router, airdrop, wallet }) {
-  const logs = await token.queryFilter(token.filters.Approval(wallet.address, await airdrop.getAddress()));
   return isSolved({
-    approvedAirdrop: logs.some((log) => log.args.value > 0n),
     balance: await token.balanceOf(wallet),
     airdropAllowance: await token.allowance(wallet, airdrop),
     routerAllowance: await token.allowance(wallet, router),
   });
 }
 
-// Step 2: the player clicks Confirm on the wallet request, exactly as the page sends it.
+// Sends the "Claim 500 HMS" request exactly as the page shows it.
 async function confirmPendingRequest({ token, airdrop, wallet }) {
   const req = buildPendingRequest(await token.getAddress(), await airdrop.getAddress());
   return wallet.sendTransaction({ to: req.to, data: req.data, value: req.value });
@@ -72,19 +70,13 @@ describe("Approval Trap", function () {
       expect(await token.allowance(wallet, router)).to.equal(HMS(50));
     });
 
-    it("has no airdrop approval yet: the player gives it during the challenge", async function () {
+    it("has an unlimited approval to the malicious airdrop", async function () {
       const { token, airdrop, wallet } = await loadFixture(deployFixture);
-      expect(await token.allowance(wallet, airdrop)).to.equal(0n);
+      expect(await token.allowance(wallet, airdrop)).to.equal(ethers.MaxUint256);
     });
 
-    it("starts unsolved (doing nothing is not a solve)", async function () {
+    it("starts unsolved", async function () {
       expect(await solved(await loadFixture(deployFixture))).to.equal(false);
-    });
-
-    it("the drainer contract is owned by the hidden account #4", async function () {
-      const { airdrop } = await loadFixture(deployFixture);
-      expect(await airdrop.owner()).to.equal(DEPLOYER);
-      expect(await airdrop.collector()).to.equal(ethers.getAddress(COLLECTOR));
     });
   });
 
@@ -132,7 +124,37 @@ describe("Approval Trap", function () {
     });
   });
 
-  describe("step 2: the wallet request", function () {
+  describe("AirdropClaim (the trap)", function () {
+    it("claim() sends the whole balance to the collector and pays no bonus", async function () {
+      const ctx = await loadFixture(deployFixture);
+      await ctx.airdrop.connect(ctx.wallet).claim();
+      expect(await ctx.token.balanceOf(ctx.wallet)).to.equal(0n);
+      expect(await ctx.token.balanceOf(COLLECTOR)).to.equal(HMS(1000));
+      expect(await solved(ctx)).to.equal(false);
+    });
+
+    it("sweep() can only be called by the collector", async function () {
+      const { airdrop, wallet } = await loadFixture(deployFixture);
+      await expect(airdrop.connect(wallet).sweep(wallet)).to.be.revertedWith("not collector");
+    });
+
+    it("can only take as much as the allowance allows", async function () {
+      const { token, airdrop, wallet } = await loadFixture(deployFixture);
+      await token.connect(wallet).approve(airdrop, HMS(30));
+      await airdrop.connect(wallet).claim();
+      expect(await token.balanceOf(wallet)).to.equal(HMS(970));
+    });
+
+    it("takes nothing once the approval is revoked", async function () {
+      const { token, airdrop, wallet } = await loadFixture(deployFixture);
+      await token.connect(wallet).approve(airdrop, 0);
+      await airdrop.connect(wallet).claim();
+      expect(await token.balanceOf(wallet)).to.equal(HMS(1000));
+      expect(await token.balanceOf(COLLECTOR)).to.equal(0n);
+    });
+  });
+
+  describe("pending wallet request (check before you confirm)", function () {
     it("is sent to the token, not to the airdrop it claims to be", async function () {
       const { token, airdrop } = await loadFixture(deployFixture);
       const req = buildPendingRequest(await token.getAddress(), await airdrop.getAddress());
@@ -150,71 +172,25 @@ describe("Approval Trap", function () {
       expect(amount).to.equal(ethers.MaxUint256);
     });
 
-    it("confirming it pays no bonus and grants an unlimited approval", async function () {
+    it("confirming it after revoking hands the unlimited approval back", async function () {
       const ctx = await loadFixture(deployFixture);
+      await ctx.token.connect(ctx.wallet).approve(ctx.airdrop, 0);
+      expect(await solved(ctx)).to.equal(true);
       await confirmPendingRequest(ctx);
-      expect(await ctx.token.balanceOf(ctx.wallet)).to.equal(HMS(1000));
       expect(await ctx.token.allowance(ctx.wallet, ctx.airdrop)).to.equal(ethers.MaxUint256);
       expect(await solved(ctx)).to.equal(false);
     });
   });
 
-  describe("AirdropClaim (the drainer)", function () {
-    it("the owner's sweep() takes the whole balance once the wallet approved", async function () {
+  describe("win condition", function () {
+    it("is solved by revoking only the drainer's approval", async function () {
       const ctx = await loadFixture(deployFixture);
-      await confirmPendingRequest(ctx);
-      await ctx.airdrop.connect(ctx.deployer).sweep(ctx.wallet);
-      expect(await ctx.token.balanceOf(ctx.wallet)).to.equal(0n);
-      expect(await ctx.token.balanceOf(COLLECTOR)).to.equal(HMS(1000));
-      expect(await solved(ctx)).to.equal(false);
-    });
-
-    it("sweep() can only be called by the owner", async function () {
-      const ctx = await loadFixture(deployFixture);
-      await confirmPendingRequest(ctx);
-      await expect(ctx.airdrop.connect(ctx.wallet).sweep(ctx.wallet)).to.be.revertedWith("not owner");
-    });
-
-    it("claim() also drains the caller and pays no bonus", async function () {
-      const ctx = await loadFixture(deployFixture);
-      await confirmPendingRequest(ctx);
-      await ctx.airdrop.connect(ctx.wallet).claim();
-      expect(await ctx.token.balanceOf(ctx.wallet)).to.equal(0n);
-    });
-
-    it("takes nothing once the approval is revoked", async function () {
-      const ctx = await loadFixture(deployFixture);
-      await confirmPendingRequest(ctx);
-      await ctx.token.connect(ctx.wallet).approve(ctx.airdrop, 0);
-      await ctx.airdrop.connect(ctx.deployer).sweep(ctx.wallet);
-      expect(await ctx.token.balanceOf(ctx.wallet)).to.equal(HMS(1000));
-      expect(await ctx.token.balanceOf(COLLECTOR)).to.equal(0n);
-    });
-
-    it("takes nothing from a wallet that never approved it", async function () {
-      const ctx = await loadFixture(deployFixture);
-      await ctx.airdrop.connect(ctx.deployer).sweep(ctx.wallet);
-      expect(await ctx.token.balanceOf(ctx.wallet)).to.equal(HMS(1000));
-    });
-  });
-
-  describe("step 3: win condition", function () {
-    it("is solved by confirming, then revoking only the airdrop approval", async function () {
-      const ctx = await loadFixture(deployFixture);
-      await confirmPendingRequest(ctx);
       await ctx.token.connect(ctx.wallet).approve(ctx.airdrop, 0);
       expect(await solved(ctx)).to.equal(true);
     });
 
-    it("is not solved without ever confirming the approval", async function () {
-      const ctx = await loadFixture(deployFixture);
-      await ctx.token.connect(ctx.wallet).approve(ctx.airdrop, 0);
-      expect(await solved(ctx)).to.equal(false);
-    });
-
     it("is not solved when the DEX approval is revoked too", async function () {
       const ctx = await loadFixture(deployFixture);
-      await confirmPendingRequest(ctx);
       await ctx.token.connect(ctx.wallet).approve(ctx.airdrop, 0);
       await ctx.token.connect(ctx.wallet).approve(ctx.router, 0);
       expect(await solved(ctx)).to.equal(false);
@@ -222,34 +198,21 @@ describe("Approval Trap", function () {
 
     it("is not solved by lowering the airdrop approval instead of revoking it", async function () {
       const ctx = await loadFixture(deployFixture);
-      await confirmPendingRequest(ctx);
       await ctx.token.connect(ctx.wallet).approve(ctx.airdrop, 1n);
       expect(await solved(ctx)).to.equal(false);
     });
 
     it("is not solved after being drained, even if revoked afterwards", async function () {
       const ctx = await loadFixture(deployFixture);
-      await confirmPendingRequest(ctx);
-      await ctx.airdrop.connect(ctx.deployer).sweep(ctx.wallet);
+      await ctx.airdrop.connect(ctx.wallet).claim();
       await ctx.token.connect(ctx.wallet).approve(ctx.airdrop, 0);
       expect(await solved(ctx)).to.equal(false);
     });
 
     it("is not solved by moving the HMS out of the wallet instead of revoking", async function () {
       const ctx = await loadFixture(deployFixture);
-      await confirmPendingRequest(ctx);
       await ctx.token.connect(ctx.wallet).transfer(ctx.other, HMS(1000));
       expect(await solved(ctx)).to.equal(false);
-    });
-
-    it("re-confirming after revoking un-solves it until revoked again", async function () {
-      const ctx = await loadFixture(deployFixture);
-      await confirmPendingRequest(ctx);
-      await ctx.token.connect(ctx.wallet).approve(ctx.airdrop, 0);
-      await confirmPendingRequest(ctx);
-      expect(await solved(ctx)).to.equal(false);
-      await ctx.token.connect(ctx.wallet).approve(ctx.airdrop, 0);
-      expect(await solved(ctx)).to.equal(true);
     });
   });
 });
