@@ -17,15 +17,16 @@
       flex-direction: column;
       gap: 24px;
     }
-    .card { background: #fff; border-radius: 12px; padding: 28px; }
-    h2 { margin: 0 0 16px; font-size: 1.5rem; }
+    .card { background: #fff; border-radius: 8px; padding: 30px; box-shadow: 0 8px 20px rgba(0,0,0,.1); }
+    h2 { margin: 0 0 20px; font-size: 1.6rem; color: #333; }
     h3 { margin: 20px 0 8px; font-size: 1.1rem; }
-    p, li { line-height: 1.5; }
+    p, li { margin: 10px 0; color: #555; line-height: 1.55; }
     ol, ul { margin: 0; padding-left: 20px; }
     code { font-family: Consolas, monospace; background: #f0f3f6; padding: 1px 6px; border-radius: 4px; }
     a { color: #007bff; }
-    .row { display: flex; gap: 24px; align-items: flex-start; }
+    .row { display: flex; gap: 30px; align-items: flex-start; }
     .row .card { flex: 1 1 0; min-width: 0; }
+    .contract-stack { display: flex; flex-direction: column; gap: 24px; }
     .label { color: #666; }
     .mono { font-family: Consolas, monospace; font-weight: 700; word-break: break-all; }
     button {
@@ -43,7 +44,7 @@
     pre {
       background: #1e1e1e;
       color: #d4d4d4;
-      border-radius: 12px;
+      border-radius: 8px;
       padding: 16px;
       overflow: auto;
       max-height: 560px;
@@ -59,6 +60,20 @@
     .dot { width: 12px; height: 12px; border-radius: 50%; background: #f5c518; }
     .status.connected .dot { background: #28a745; }
     .status.lost .dot { background: #dc3545; }
+    .server-status-card { display: flex; align-items: center; gap: 14px; padding: 20px 24px; font-size: .95rem; font-weight: 600; }
+    .server-status-card.waiting { background: linear-gradient(135deg,#fffbe6,#fff3cc); border: 1px solid #f5c518; color: #7a5c00; }
+    .server-status-card.connected { background: linear-gradient(135deg,#e6fff0,#c8f6dc); border: 1px solid #28a745; color: #0f5132; }
+    .server-status-card.lost { background: linear-gradient(135deg,#fff0f0,#f8d7da); border: 1px solid #dc3545; color: #842029; }
+    .status-title { font-size: 1rem; font-weight: 800; }
+    .status-sub { font-size: .8rem; font-weight: 400; opacity: .85; }
+    .server-status-card .dot { width: 13px; height: 13px; flex-shrink: 0; }
+    .server-status-card.connected .dot { background: #28a745; animation: pulse-green 1.4s infinite; }
+    .server-status-card.waiting .dot { background: #f5c518; animation: pulse-yellow 1.4s infinite; }
+    .server-status-card.lost .dot { background: #dc3545; }
+    @keyframes pulse-green { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+    @keyframes pulse-yellow { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+    .challenge-card { border-left: 5px solid #007bff; box-shadow: 0 8px 20px rgba(0,123,255,.18); }
+    .challenge-card h2 { margin-bottom: 10px; color: #0056b3; }
     .solved { display: inline-block; background: #28a745; color: #fff; border-radius: 6px; padding: 8px 12px; font-weight: 700; }
     .drained { display: inline-block; background: #dc3545; color: #fff; border-radius: 6px; padding: 8px 12px; font-weight: 700; }
     #flagBox { display: none; margin-top: 12px; }
@@ -71,6 +86,11 @@
     .fake-btn { flex: 1; text-align: center; padding: 10px 18px; border-radius: 8px; font-weight: 700; opacity: .6; cursor: not-allowed; }
     .fake-btn.reject { border: 1px solid #ccc; color: #333; }
     .fake-btn.confirm { background: #007bff; color: #fff; }
+    .s-kw { color: #569cd6; }
+    .s-ty { color: #4ec9b0; }
+    .s-str { color: #ce9178; }
+    .s-num { color: #b5cea8; }
+    .s-cmt { color: #6a9955; font-style: italic; }
 
     /* Tabs: one per contract so multi-contract challenges stay readable. */
     .tabs { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -97,11 +117,11 @@
   </style>
 </head>
 <body>
-  <div class="card status" id="status-card">
+  <div class="card status server-status-card waiting" id="status-card">
     <div class="dot"></div>
     <div>
-      <div id="status-title">Connecting to server…</div>
-      <div class="label" id="status-sub">Waiting for the challenge API</div>
+      <div class="status-title" id="status-title">Connecting to server…</div>
+      <div class="status-sub" id="status-sub">Waiting for server to come up</div>
     </div>
   </div>
 
@@ -117,7 +137,7 @@
 
   <!-- Overview -->
   <section class="panel" id="panel-overview">
-    <div class="card">
+    <div class="card challenge-card">
       <h2>The Approval Trap</h2>
       <p>Your wallet (<strong>Account&nbsp;#0</strong>) holds 1,000 HMS. The "HMS Community Airdrop" site promises a free 500 HMS bonus, and its <strong>Claim</strong> button has put a request in your wallet waiting for you to confirm.</p>
       <p>Last week you clicked the same site and confirmed without reading. That transaction was an <strong>approval</strong>. It didn't move any tokens, which is why nothing looked wrong. Instead it gave another contract permission to move your tokens whenever it likes. Approvals stay active until you change them.</p>
@@ -196,7 +216,11 @@
 
   <!-- HamonisToken -->
   <section class="panel" id="panel-HamonisToken">
-    <div class="row">
+    <div class="contract-stack">
+      <div class="card">
+        <h2>Source: HamonisToken</h2>
+        <pre class="source" data-contract="HamonisToken">Loading contract source...</pre>
+      </div>
       <div class="card">
         <h2>HamonisToken</h2>
         <p>Address<br><span id="tokenAddress" class="mono copyable">Loading...</span></p>
@@ -204,16 +228,16 @@
         <button type="button" class="abi-toggle" data-contract="HamonisToken">Show ABI</button>
         <pre class="abi-box" data-contract="HamonisToken" style="display:none">Loading ABI...</pre>
       </div>
-      <div class="card">
-        <h2>Source</h2>
-        <pre class="source" data-contract="HamonisToken">Loading contract source...</pre>
-      </div>
     </div>
   </section>
 
   <!-- SwapRouter -->
   <section class="panel" id="panel-SwapRouter">
-    <div class="row">
+    <div class="contract-stack">
+      <div class="card">
+        <h2>Source: SwapRouter</h2>
+        <pre class="source" data-contract="SwapRouter">Loading contract source...</pre>
+      </div>
       <div class="card">
         <h2>SwapRouter</h2>
         <p>Address<br><span id="routerAddress" class="mono copyable">Loading...</span></p>
@@ -222,16 +246,16 @@
         <button type="button" class="abi-toggle" data-contract="SwapRouter">Show ABI</button>
         <pre class="abi-box" data-contract="SwapRouter" style="display:none">Loading ABI...</pre>
       </div>
-      <div class="card">
-        <h2>Source</h2>
-        <pre class="source" data-contract="SwapRouter">Loading contract source...</pre>
-      </div>
     </div>
   </section>
 
   <!-- AirdropClaim -->
   <section class="panel" id="panel-AirdropClaim">
-    <div class="row">
+    <div class="contract-stack">
+      <div class="card">
+        <h2>Source: AirdropClaim</h2>
+        <pre class="source" data-contract="AirdropClaim">Loading contract source...</pre>
+      </div>
       <div class="card">
         <div class="promo">
           <strong>🎁 HMS Community Airdrop</strong><br>
@@ -243,10 +267,6 @@
         <p class="label">Read the source before you trust the banner.</p>
         <button type="button" class="abi-toggle" data-contract="AirdropClaim">Show ABI</button>
         <pre class="abi-box" data-contract="AirdropClaim" style="display:none">Loading ABI...</pre>
-      </div>
-      <div class="card">
-        <h2>Source</h2>
-        <pre class="source" data-contract="AirdropClaim">Loading contract source...</pre>
       </div>
     </div>
   </section>
@@ -287,6 +307,58 @@
     const loadedSources = new Set();
     let signedKey = "";
 
+    function highlightSolidity(source) {
+      const escapeHtml = (value) => value
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+      const keywords = new Set(["pragma", "solidity", "contract", "interface", "library", "function", "constructor", "returns", "return", "if", "else", "for", "while", "require", "revert", "emit", "event", "mapping", "struct", "enum", "import", "is", "public", "private", "internal", "external", "view", "pure", "payable", "memory", "storage", "calldata", "immutable", "constant", "true", "false"]);
+      const types = new Set(["address", "bool", "string", "bytes", "uint", "uint8", "uint16", "uint32", "uint64", "uint128", "uint256", "int", "int8", "int16", "int32", "int64", "int128", "int256"]);
+      let output = "";
+      let index = 0;
+
+      while (index < source.length) {
+        if (source.startsWith("//", index)) {
+          const lineEnd = source.indexOf("\n", index);
+          const token = source.slice(index, lineEnd === -1 ? source.length : lineEnd);
+          output += `<span class="s-cmt">${escapeHtml(token)}</span>`;
+          index += token.length;
+        } else if (source.startsWith("/*", index)) {
+          const commentEnd = source.indexOf("*/", index + 2);
+          const token = source.slice(index, commentEnd === -1 ? source.length : commentEnd + 2);
+          output += `<span class="s-cmt">${escapeHtml(token)}</span>`;
+          index += token.length;
+        } else if (source[index] === '"' || source[index] === "'") {
+          const quote = source[index];
+          let end = index + 1;
+          while (end < source.length && source[end] !== quote) {
+            if (source[end] === "\\") end += 1;
+            end += 1;
+          }
+          const token = source.slice(index, Math.min(end + 1, source.length));
+          output += `<span class="s-str">${escapeHtml(token)}</span>`;
+          index += token.length;
+        } else {
+          const word = source.slice(index).match(/^[A-Za-z_$][A-Za-z0-9_$]*/);
+          const number = source.slice(index).match(/^(?:0x[0-9a-fA-F]+|\d+(?:\.\d+)?)/);
+          if (word) {
+            const token = word[0];
+            const className = keywords.has(token) ? "s-kw" : types.has(token) ? "s-ty" : "";
+            output += className ? `<span class="${className}">${token}</span>` : escapeHtml(token);
+            index += token.length;
+          } else if (number) {
+            output += `<span class="s-num">${number[0]}</span>`;
+            index += number[0].length;
+          } else {
+            output += escapeHtml(source[index]);
+            index += 1;
+          }
+        }
+      }
+
+      return output;
+    }
+
     function showTab(name) {
       if (!document.getElementById("panel-" + name)) name = "overview";
       document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.tab === name));
@@ -301,7 +373,7 @@
       try {
         const res = await fetch(API + "/contracts/" + name + ".sol");
         if (!res.ok) throw new Error("source " + res.status);
-        box.textContent = await res.text();
+        box.innerHTML = highlightSolidity(await res.text());
         loadedSources.add(name);
       } catch (err) {
         box.textContent = "Contract source is unavailable.";
@@ -309,7 +381,7 @@
     }
 
     function setStatus(state, title, sub) {
-      document.getElementById("status-card").className = "card status " + state;
+      document.getElementById("status-card").className = "card status server-status-card " + state;
       document.getElementById("status-title").textContent = title;
       document.getElementById("status-sub").textContent = sub;
     }
@@ -361,7 +433,7 @@
         const res = await fetch(API + "/status");
         if (!res.ok) throw new Error("status " + res.status);
         const data = await res.json();
-        setStatus("connected", "Server connected", "The challenge API is responding");
+        setStatus("connected", "Server connected", "Server is up and running");
         setText("wallet", data.wallet);
         setText("balance", data.balance + " HMS");
         setText("tokenAddress", data.tokenAddress);
@@ -400,7 +472,7 @@
           flagBox.style.display = "none";
         }
       } catch (err) {
-        setStatus("lost", "Lost connection", "The challenge API is unreachable");
+        setStatus("waiting", "Connecting to server…", "Waiting for server to come up");
         console.error(err);
       }
     }

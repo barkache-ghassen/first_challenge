@@ -58,3 +58,10 @@ DEX approval. The solve API returns the flag while all of these hold:
 
 Full solve, the real-world lesson and how to test locally are in
 [walkthrough.md](walkthrough.md).
+
+
+docker build -t hamonis:ApprovalTrap .
+
+docker run -d -p 8080:8080 --name Hamonis-ApprovalTrap hamonis:ApprovalTrap
+
+docker save -o ApprovalTrap.tar hamonis:ApprovalTrap
