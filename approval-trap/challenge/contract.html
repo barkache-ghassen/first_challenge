@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>The Approval Trap</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      background: #f4f6f8;
+      color: #222;
+      margin: 0 auto;
+      max-width: 1400px;
+      padding: 40px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+    .card { background: #fff; border-radius: 8px; padding: 30px; box-shadow: 0 8px 20px rgba(0,0,0,.1); }
+    h2 { margin: 0 0 20px; font-size: 1.6rem; color: #333; }
+    h3 { margin: 20px 0 8px; font-size: 1.1rem; }
+    p, li { margin: 10px 0; color: #555; line-height: 1.55; }
+    ol, ul { margin: 0; padding-left: 20px; }
+    code { font-family: Consolas, monospace; background: #f0f3f6; padding: 1px 6px; border-radius: 4px; }
+    a { color: #007bff; }
+    .row { display: flex; gap: 30px; align-items: flex-start; }
+    .row .card { flex: 1 1 0; min-width: 0; }
+    .contract-stack { display: flex; flex-direction: column; gap: 24px; }
+    .label { color: #666; }
+    .mono { font-family: Consolas, monospace; font-weight: 700; word-break: break-all; }
+    button {
+      margin-top: 12px;
+      margin-right: 8px;
+      padding: 10px 18px;
+      font-weight: 700;
+      color: #fff;
+      background: #007bff;
+      border: 0;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    button:hover { background: #0056b3; }
+    pre {
+      background: #1e1e1e;
+      color: #d4d4d4;
+      border-radius: 8px;
+      padding: 16px;
+      overflow: auto;
+      max-height: 560px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .light-pre { background: #f0f3f6; color: #111; max-height: none; }
+    .wallet-pre { background: transparent; color: #111; padding: 0; margin: 4px 0; max-height: none; }
+    .private-key { display: none; }
+    .pk-toggle { cursor: pointer; color: #007bff; font-weight: 700; }
+    hr { border: 0; border-top: 1px solid #ddd; margin: 14px 0; }
+    .status { display: flex; gap: 12px; align-items: center; font-weight: 700; }
+    .dot { width: 12px; height: 12px; border-radius: 50%; background: #f5c518; }
+    .status.connected .dot { background: #28a745; }
+    .status.lost .dot { background: #dc3545; }
+    .server-status-card { display: flex; align-items: center; gap: 14px; padding: 20px 24px; font-size: .95rem; font-weight: 600; }
+    .server-status-card.waiting { background: linear-gradient(135deg,#fffbe6,#fff3cc); border: 1px solid #f5c518; color: #7a5c00; }
+    .server-status-card.connected { background: linear-gradient(135deg,#e6fff0,#c8f6dc); border: 1px solid #28a745; color: #0f5132; }
+    .server-status-card.lost { background: linear-gradient(135deg,#fff0f0,#f8d7da); border: 1px solid #dc3545; color: #842029; }
+    .status-title { font-size: 1rem; font-weight: 800; }
+    .status-sub { font-size: .8rem; font-weight: 400; opacity: .85; }
+    .server-status-card .dot { width: 13px; height: 13px; flex-shrink: 0; }
+    .server-status-card.connected .dot { background: #28a745; animation: pulse-green 1.4s infinite; }
+    .server-status-card.waiting .dot { background: #f5c518; animation: pulse-yellow 1.4s infinite; }
+    .server-status-card.lost .dot { background: #dc3545; }
+    @keyframes pulse-green { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+    @keyframes pulse-yellow { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+    .challenge-card { border-left: 5px solid #007bff; box-shadow: 0 8px 20px rgba(0,123,255,.18); }
+    .challenge-card h2 { margin-bottom: 10px; color: #0056b3; }
+    .solved { display: inline-block; background: #28a745; color: #fff; border-radius: 6px; padding: 8px 12px; font-weight: 700; }
+    .drained { display: inline-block; background: #dc3545; color: #fff; border-radius: 6px; padding: 8px 12px; font-weight: 700; }
+    #flagBox { display: none; margin-top: 12px; }
+    #flagBox pre { color: #00ff88; text-align: center; font-weight: 700; }
+    .copyable { cursor: pointer; }
+    .promo { background: linear-gradient(135deg, #fff4d6, #ffe0f0); border-radius: 12px; padding: 16px 20px; margin-bottom: 16px; }
+    .tx { border: 1px solid #e3e7eb; border-radius: 10px; padding: 14px 18px; margin-bottom: 14px; }
+    .wallet-prompt { border: 2px solid #f5c518; }
+    .prompt-actions { display: flex; gap: 12px; margin-top: 16px; }
+    .prompt-actions button { flex: 1; margin: 0; }
+    button.secondary { color: #333; background: #fff; border: 1px solid #ccc; }
+    button.secondary:hover { background: #f0f3f6; }
+    button.danger { background: #dc3545; }
+    button.danger:hover { background: #a71d2a; }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+    .notice { border-radius: 10px; padding: 14px 18px; margin-top: 14px; display: none; }
+    .notice.show { display: block; }
+    .notice.good { background: #e6fff0; border: 1px solid #28a745; color: #0f5132; }
+    .notice.bad { background: #fff0f0; border: 1px solid #dc3545; color: #842029; }
+    .alert { display: none; border-radius: 8px; padding: 18px 24px; font-weight: 700; }
+    .alert.show { display: block; }
+    .alert.danger { background: #dc3545; color: #fff; }
+    .alert.danger a { color: #fff; }
+    .alert.done { background: #28a745; color: #fff; }
+    .alert .countdown { font-family: Consolas, monospace; font-size: 1.6rem; }
+    .claim-hero { text-align: center; padding: 28px; border-radius: 8px; background: linear-gradient(135deg, #fff4d6, #ffe0f0); }
+    .claim-hero .big { font-size: 2.4rem; font-weight: 800; margin: 8px 0; }
+    .table-wrap { overflow-x: auto; }
+    table.approvals { width: 100%; border-collapse: collapse; }
+    table.approvals th, table.approvals td { text-align: left; padding: 12px 10px; border-bottom: 1px solid #e3e7eb; vertical-align: middle; }
+    table.approvals td button { margin: 0; }
+    .risk { display: inline-block; border-radius: 6px; padding: 2px 8px; font-size: .85em; font-weight: 700; }
+    .risk.high { background: #f8d7da; color: #842029; }
+    .risk.low { background: #e6fff0; color: #0f5132; }
+    .risk.none { background: #f0f3f6; color: #666; }
+    .s-kw { color: #569cd6; }
+    .s-ty { color: #4ec9b0; }
+    .s-str { color: #ce9178; }
+    .s-num { color: #b5cea8; }
+    .s-cmt { color: #6a9955; font-style: italic; }
+
+    /* Tabs: one per contract so multi-contract challenges stay readable. */
+    .tabs { display: flex; flex-wrap: wrap; gap: 8px; }
+    .tab {
+      margin: 0;
+      padding: 10px 18px;
+      color: #333;
+      background: #fff;
+      border: 1px solid #dfe3e8;
+      border-radius: 8px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .tab:hover { background: #eef4ff; }
+    .tab.active { color: #fff; background: #007bff; border-color: #007bff; }
+    .tab .kind { font-weight: 400; opacity: .75; font-size: .85em; }
+    .panel { display: none; flex-direction: column; gap: 24px; }
+    .panel.active { display: flex; }
+    @media (max-width: 900px) {
+      body { padding: 16px; }
+      .row { flex-direction: column; }
+      .row .card { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="card status server-status-card waiting" id="status-card">
+    <div class="dot"></div>
+    <div>
+      <div class="status-title" id="status-title">Connecting to server…</div>
+      <div class="status-sub" id="status-sub">Waiting for server to come up</div>
+    </div>
+  </div>
+
+  <div class="alert" id="alert"></div>
+
+  <nav class="tabs" id="tabs">
+    <button class="tab" data-tab="overview">Overview</button>
+    <button class="tab" data-tab="airdrop">1 · Airdrop</button>
+    <button class="tab" data-tab="request">2 · Wallet request <span class="kind" id="request-kind">1 pending</span></button>
+    <button class="tab" data-tab="approvals">3 · Approvals</button>
+    <button class="tab" data-tab="signed">What you signed</button>
+    <button class="tab" data-tab="HamonisToken">HamonisToken <span class="kind">contract</span></button>
+    <button class="tab" data-tab="SwapRouter">SwapRouter <span class="kind">contract</span></button>
+    <button class="tab" data-tab="AirdropClaim">AirdropClaim <span class="kind">contract</span></button>
+    <button class="tab" data-tab="accounts">Accounts</button>
+  </nav>
+
+  <!-- Overview -->
+  <section class="panel" id="panel-overview">
+    <div class="card challenge-card">
+      <h2>The Approval Trap</h2>
+      <p>Your wallet (<strong>Account&nbsp;#0</strong>) holds 1,000 HMS. You've just been told you're eligible for a free <strong>HMS Community Airdrop</strong>.</p>
+      <ol>
+        <li><strong>Airdrop.</strong> Open <strong>1 · Airdrop</strong> and click <strong>Claim</strong>.</li>
+        <li><strong>Confirm.</strong> Your wallet pops up a request in <strong>2 · Wallet request</strong>. Look at what it actually asks for, then confirm it, the way most people do without reading.</li>
+        <li><strong>Revoke before your funds are stolen.</strong> The "claim" was an <strong>unlimited approval</strong>: the airdrop contract can now take every HMS you hold. A drainer bot sweeps your wallet when the countdown hits zero. Open <strong>3 · Approvals</strong> and revoke the dangerous approval in time.</li>
+      </ol>
+      <p>Keep all 1,000 HMS, and leave your DEX approval (<code>SwapRouter</code>, 50 HMS) as it is: you still use it. You can also revoke from your own tools, for example <code>npx hardhat console --network localhost</code>, by calling <code>approve(spender, 0)</code> on the token from Account&nbsp;#0.</p>
+      <p>If the drainer gets there first, your HMS are gone and the challenge has to be restarted.</p>
+    </div>
+
+    <div class="row">
+      <div class="card">
+        <h2>Your wallet</h2>
+        <p>Account #0<br><span id="wallet" class="mono copyable">Loading...</span></p>
+        <p>HMS balance: <span id="balance" class="mono">Loading...</span></p>
+        <p id="solvedBadge"></p>
+        <div id="flagBox"><pre id="flagValue"></pre></div>
+        <button id="refresh-button" type="button">Refresh</button>
+        <p class="label">Network: <span id="network">http://127.0.0.1:8545</span></p>
+        <p class="label">Chain ID: <span id="chainId">31337</span></p>
+      </div>
+
+      <div class="card">
+        <h2>In the real world</h2>
+        <p>Your wallet shows an approval as a harmless-looking "Allow access" or "Confirm" prompt. Before you confirm, check:</p>
+        <ul>
+          <li><strong>Spender</strong>: is this a contract you know and meant to use?</li>
+          <li><strong>Amount</strong>: "unlimited" means every token of that type, now and later.</li>
+          <li><strong>Why</strong>: a claim or "verification" never needs to spend your tokens.</li>
+        </ul>
+        <p>To review and cancel approvals you already gave, use <a href="https://revoke.cash" target="_blank" rel="noopener">revoke.cash</a>. It lists every spender your address has approved, on every token, and sends the revoke transaction for you. Do it after any suspicious click, and every so often anyway.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Airdrop -->
+  <section class="panel" id="panel-airdrop">
+    <div class="card claim-hero">
+      <p><strong>🎁 HMS Community Airdrop</strong></p>
+      <p>Congratulations! Your wallet is eligible for</p>
+      <p class="big">500 HMS</p>
+      <p class="label">Approve once to verify your wallet, then the bonus is yours.</p>
+      <button id="claim-button" type="button">Claim 500 HMS</button>
+      <p class="label" id="claim-note"></p>
+    </div>
+  </section>
+
+  <!-- Wallet request -->
+  <section class="panel" id="panel-request">
+    <div class="row">
+      <div class="card wallet-prompt">
+        <p class="label">Request from <strong id="req-site">HMS Community Airdrop</strong></p>
+        <h2 id="req-label">Claim 500 HMS bonus</h2>
+        <p class="label">The site says this transaction claims your bonus. This is everything your wallet is actually asked to send:</p>
+        <p><span class="label">From</span><br><span id="req-from" class="mono copyable">Loading...</span></p>
+        <p><span class="label">To</span><br><span id="req-to" class="mono copyable">Loading...</span></p>
+        <p><span class="label">Value</span><br><span id="req-value" class="mono">0 ETH</span></p>
+        <p class="label">Data</p>
+        <pre id="req-data" class="light-pre copyable">Loading...</pre>
+        <div class="prompt-actions">
+          <button type="button" class="secondary" id="reject-button">Reject</button>
+          <button type="button" id="confirm-button">Confirm</button>
+        </div>
+        <div class="notice" id="request-notice"></div>
+      </div>
+      <div class="card">
+        <h2>Before you confirm</h2>
+        <ol>
+          <li>Who is <strong>To</strong>? Compare it with the addresses in the contract tabs. Is it the airdrop, or something else?</li>
+          <li>The first 4 bytes of <strong>Data</strong> are the function selector. Which function is it?</li>
+          <li>The rest is the arguments, 32 bytes each. Who gets permission, and for how much?</li>
+          <li>Does a "claim" need any of that?</li>
+        </ol>
+        <p class="label">Confirm sends this exact transaction from Account&nbsp;#0. Reject sends nothing.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Approvals -->
+  <section class="panel" id="panel-approvals">
+    <div class="card">
+      <h2>Approvals for Account #0</h2>
+      <p class="label">Every contract your wallet has allowed to spend its HMS. This is what <a href="https://revoke.cash" target="_blank" rel="noopener">revoke.cash</a> shows you for a real address. Revoke what you don't trust; keep what you use.</p>
+      <div class="table-wrap">
+        <table class="approvals">
+          <thead><tr><th>Token</th><th>Spender</th><th>Allowance</th><th>Risk</th><th></th></tr></thead>
+          <tbody id="approvals-body"><tr><td colspan="5">Loading...</td></tr></tbody>
+        </table>
+      </div>
+      <div class="notice" id="approvals-notice"></div>
+    </div>
+  </section>
+
+  <!-- What you signed -->
+  <section class="panel" id="panel-signed">
+    <div class="card">
+      <h2>What you signed</h2>
+      <p class="label">Transactions sent from your wallet that changed an HMS approval, oldest first. This is the raw form a wallet shows under "Data" or "Hex". Every call starts with a 4-byte function selector, followed by its arguments in 32-byte words.</p>
+      <div id="signedList">Loading...</div>
+    </div>
+  </section>
+
+  <!-- HamonisToken -->
+  <section class="panel" id="panel-HamonisToken">
+    <div class="contract-stack">
+      <div class="card">
+        <h2>Source: HamonisToken</h2>
+        <pre class="source" data-contract="HamonisToken">Loading contract source...</pre>
+      </div>
+      <div class="card">
+        <h2>HamonisToken</h2>
+        <p>Address<br><span id="tokenAddress" class="mono copyable">Loading...</span></p>
+        <p class="label">The HMS ERC20 token. Approvals live here: <code>allowance(owner, spender)</code> is how much <code>spender</code> may still pull from <code>owner</code>, and <code>approve(spender, amount)</code> overwrites it.</p>
+        <button type="button" class="abi-toggle" data-contract="HamonisToken">Show ABI</button>
+        <pre class="abi-box" data-contract="HamonisToken" style="display:none">Loading ABI...</pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- SwapRouter -->
+  <section class="panel" id="panel-SwapRouter">
+    <div class="contract-stack">
+      <div class="card">
+        <h2>Source: SwapRouter</h2>
+        <pre class="source" data-contract="SwapRouter">Loading contract source...</pre>
+      </div>
+      <div class="card">
+        <h2>SwapRouter</h2>
+        <p>Address<br><span id="routerAddress" class="mono copyable">Loading...</span></p>
+        <p>Your allowance to it: <span id="routerAllowance" class="mono">Loading...</span> HMS</p>
+        <p class="label">The DEX you use. Keep this approval.</p>
+        <button type="button" class="abi-toggle" data-contract="SwapRouter">Show ABI</button>
+        <pre class="abi-box" data-contract="SwapRouter" style="display:none">Loading ABI...</pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- AirdropClaim -->
+  <section class="panel" id="panel-AirdropClaim">
+    <div class="contract-stack">
+      <div class="card">
+        <h2>Source: AirdropClaim</h2>
+        <pre class="source" data-contract="AirdropClaim">Loading contract source...</pre>
+      </div>
+      <div class="card">
+        <div class="promo">
+          <strong>🎁 HMS Community Airdrop</strong><br>
+          Approve once to verify your wallet and get a FREE 500 HMS bonus!
+        </div>
+        <h2>AirdropClaim</h2>
+        <p>Address<br><span id="airdropAddress" class="mono copyable">Loading...</span></p>
+        <p>Your allowance to it: <span id="airdropAllowance" class="mono">Loading...</span> HMS</p>
+        <p class="label">Read the source before you trust the banner. Its owner runs the bot that calls <code>sweep()</code>.</p>
+        <button type="button" class="abi-toggle" data-contract="AirdropClaim">Show ABI</button>
+        <pre class="abi-box" data-contract="AirdropClaim" style="display:none">Loading ABI...</pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- Accounts -->
+  <section class="panel" id="panel-accounts">
+    <div class="card">
+      <h2>Local accounts</h2>
+      <p class="label">Hardhat development accounts for this local chain only. Account #0 is your wallet in this challenge.</p>
+
+      <p><strong>Account #0</strong> · your wallet</p>
+      <pre class="wallet-pre copyable">0xbDA5747bFD65F08deb54cb465eB87D40e51B197E</pre>
+      <p class="pk-toggle" data-key="pk0">Private key</p>
+      <pre id="pk0" class="private-key wallet-pre copyable">0x689af8efa8c651a91ad287602527f3af2fe9f6501a7ac4b061667b5a93e037fd</pre>
+      <hr>
+
+      <p><strong>Account #1</strong></p>
+      <pre class="wallet-pre copyable">0x70997970C51812dc3A010C7d01b50e0d17dc79C8</pre>
+      <p class="pk-toggle" data-key="pk1">Private key</p>
+      <pre id="pk1" class="private-key wallet-pre copyable">0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d</pre>
+      <hr>
+
+      <p><strong>Account #2</strong></p>
+      <pre class="wallet-pre copyable">0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC</pre>
+      <p class="pk-toggle" data-key="pk2">Private key</p>
+      <pre id="pk2" class="private-key wallet-pre copyable">0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a</pre>
+      <hr>
+
+      <p><strong>Account #3</strong></p>
+      <pre class="wallet-pre copyable">0x90F79bf6EB2c4f870365E785982E1f101E93b906</pre>
+      <p class="pk-toggle" data-key="pk3">Private key</p>
+      <pre id="pk3" class="private-key wallet-pre copyable">0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6</pre>
+    </div>
+  </section>
+
+  <script>
+    const API = new URLSearchParams(location.search).get("api") || "http://127.0.0.1:3000";
+    const loadedSources = new Set();
+    let signedKey = "";
+    let latest = null;
+    let fetchedAt = 0;
+
+    function highlightSolidity(source) {
+      const escapeHtml = (value) => value
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+      const keywords = new Set(["pragma", "solidity", "contract", "interface", "library", "function", "constructor", "returns", "return", "if", "else", "for", "while", "require", "revert", "emit", "event", "mapping", "struct", "enum", "import", "is", "public", "private", "internal", "external", "view", "pure", "payable", "memory", "storage", "calldata", "immutable", "constant", "true", "false"]);
+      const types = new Set(["address", "bool", "string", "bytes", "uint", "uint8", "uint16", "uint32", "uint64", "uint128", "uint256", "int", "int8", "int16", "int32", "int64", "int128", "int256"]);
+      let output = "";
+      let index = 0;
+
+      while (index < source.length) {
+        if (source.startsWith("//", index)) {
+          const lineEnd = source.indexOf("\n", index);
+          const token = source.slice(index, lineEnd === -1 ? source.length : lineEnd);
+          output += `<span class="s-cmt">${escapeHtml(token)}</span>`;
+          index += token.length;
+        } else if (source.startsWith("/*", index)) {
+          const commentEnd = source.indexOf("*/", index + 2);
+          const token = source.slice(index, commentEnd === -1 ? source.length : commentEnd + 2);
+          output += `<span class="s-cmt">${escapeHtml(token)}</span>`;
+          index += token.length;
+        } else if (source[index] === '"' || source[index] === "'") {
+          const quote = source[index];
+          let end = index + 1;
+          while (end < source.length && source[end] !== quote) {
+            if (source[end] === "\\") end += 1;
+            end += 1;
+          }
+          const token = source.slice(index, Math.min(end + 1, source.length));
+          output += `<span class="s-str">${escapeHtml(token)}</span>`;
+          index += token.length;
+        } else {
+          const word = source.slice(index).match(/^[A-Za-z_$][A-Za-z0-9_$]*/);
+          const number = source.slice(index).match(/^(?:0x[0-9a-fA-F]+|\d+(?:\.\d+)?)/);
+          if (word) {
+            const token = word[0];
+            const className = keywords.has(token) ? "s-kw" : types.has(token) ? "s-ty" : "";
+            output += className ? `<span class="${className}">${token}</span>` : escapeHtml(token);
+            index += token.length;
+          } else if (number) {
+            output += `<span class="s-num">${number[0]}</span>`;
+            index += number[0].length;
+          } else {
+            output += escapeHtml(source[index]);
+            index += 1;
+          }
+        }
+      }
+
+      return output;
+    }
+
+    function showTab(name) {
+      if (!document.getElementById("panel-" + name)) name = "overview";
+      document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.tab === name));
+      document.querySelectorAll(".panel").forEach((p) => p.classList.toggle("active", p.id === "panel-" + name));
+      history.replaceState(null, "", "#" + name);
+      loadSource(name);
+    }
+
+    async function loadSource(name) {
+      const box = document.querySelector('.source[data-contract="' + name + '"]');
+      if (!box || loadedSources.has(name)) return;
+      try {
+        const res = await fetch(API + "/contracts/" + name + ".sol");
+        if (!res.ok) throw new Error("source " + res.status);
+        box.innerHTML = highlightSolidity(await res.text());
+        loadedSources.add(name);
+      } catch (err) {
+        box.textContent = "Contract source is unavailable.";
+      }
+    }
+
+    function setStatus(state, title, sub) {
+      document.getElementById("status-card").className = "card status server-status-card " + state;
+      document.getElementById("status-title").textContent = title;
+      document.getElementById("status-sub").textContent = sub;
+    }
+
+    function setText(id, value) {
+      document.getElementById(id).textContent = value;
+    }
+
+    function renderSigned(list) {
+      const key = list.map((tx) => tx.hash).join(",");
+      if (key === signedKey) return;
+      signedKey = key;
+      const box = document.getElementById("signedList");
+      box.textContent = "";
+      list.forEach((tx, i) => {
+        const el = document.createElement("div");
+        el.className = "tx";
+        const parts = [
+          ["Transaction " + (i + 1) + " · block " + tx.block, null],
+          ["Hash", tx.hash],
+          ["From", tx.from],
+          ["To", tx.to],
+        ];
+        parts.forEach(([label, value]) => {
+          const p = document.createElement("p");
+          if (value === null) {
+            p.innerHTML = "<strong></strong>";
+            p.firstChild.textContent = label;
+          } else {
+            p.innerHTML = '<span class="label"></span><br><span class="mono copyable"></span>';
+            p.children[0].textContent = label;
+            p.children[2].textContent = value;
+          }
+          el.appendChild(p);
+        });
+        const dataLabel = document.createElement("p");
+        dataLabel.className = "label";
+        dataLabel.textContent = "Data";
+        const data = document.createElement("pre");
+        data.className = "light-pre copyable";
+        data.textContent = tx.data;
+        el.append(dataLabel, data);
+        box.appendChild(el);
+      });
+    }
+
+    function shortAddr(a) { return a.slice(0, 6) + "…" + a.slice(-4); }
+
+    function notice(id, kind, html) {
+      const el = document.getElementById(id);
+      el.className = "notice show " + kind;
+      el.innerHTML = html;
+    }
+
+    function secondsLeft() {
+      if (!latest || latest.secondsLeft === null) return null;
+      return Math.max(0, latest.secondsLeft - Math.floor((Date.now() - fetchedAt) / 1000));
+    }
+
+    function renderAlert() {
+      const el = document.getElementById("alert");
+      if (!latest) return;
+      if (latest.solved) {
+        el.className = "alert show done";
+        el.textContent = "Approval revoked in time. Your 1,000 HMS are safe. Flag is on the Overview tab.";
+      } else if (latest.drained) {
+        el.className = "alert show danger";
+        el.textContent = "The drainer swept your wallet: your HMS are gone. Restart the challenge to try again.";
+      } else if (latest.sweepAt !== null) {
+        const left = secondsLeft();
+        const mm = String(Math.floor(left / 60)).padStart(2, "0");
+        const ss = String(left % 60).padStart(2, "0");
+        // Build the banner once, then only tick the digits, so clicks on the link aren't lost to a re-render.
+        if (!el.classList.contains("danger") || !document.getElementById("alert-countdown")) {
+          el.className = "alert show danger";
+          el.innerHTML = "⚠ You approved <u>UNLIMITED</u> HMS to AirdropClaim (" + shortAddr(latest.airdropAddress) + "). "
+            + "Its drainer will sweep your wallet in <span class=\"countdown\" id=\"alert-countdown\"></span>. "
+            + "<a href=\"#approvals\" id=\"alert-link\">Revoke it now →</a>";
+          document.getElementById("alert-link").onclick = (e) => { e.preventDefault(); showTab("approvals"); };
+        }
+        document.getElementById("alert-countdown").textContent = mm + ":" + ss;
+      } else {
+        el.className = "alert";
+      }
+    }
+
+    function renderRequest(data) {
+      const done = data.approvedAirdrop;
+      document.getElementById("confirm-button").disabled = done || data.drained;
+      document.getElementById("reject-button").disabled = done || data.drained;
+      setText("request-kind", done ? "confirmed" : "1 pending");
+      if (done && !document.getElementById("request-notice").classList.contains("bad")) {
+        notice("request-notice", "bad", "<strong>Confirmed.</strong> You didn't claim anything. You just gave AirdropClaim "
+          + "permission to spend an <strong>unlimited</strong> amount of your HMS (<code>approve(AirdropClaim, 2^256-1)</code>). "
+          + "No bonus arrived. Go to <strong>3 · Approvals</strong> and revoke it before the drainer strikes.");
+      }
+      document.getElementById("claim-button").disabled = done;
+      setText("claim-note", done ? "Already claimed… or so the site says. Check your approvals." : "");
+    }
+
+    let approvalsKey = "";
+    function renderApprovals(data) {
+      // Rebuild only when something changed, so a click on Revoke isn't lost to a re-render.
+      const key = JSON.stringify(data.approvals) + data.drained;
+      if (key === approvalsKey) return;
+      approvalsKey = key;
+      const body = document.getElementById("approvals-body");
+      body.textContent = "";
+      for (const a of data.approvals) {
+        const tr = document.createElement("tr");
+        const risk = a.amount === "unlimited" ? ["high", "High: unlimited"] : a.amount === "0.0" ? ["none", "None"] : ["low", "Bounded"];
+        tr.innerHTML = "<td>HMS</td><td><strong></strong><br><span class=\"mono copyable\"></span></td>"
+          + "<td class=\"mono\"></td><td><span class=\"risk " + risk[0] + "\"></span></td><td></td>";
+        tr.children[1].children[0].textContent = a.name;
+        tr.children[1].children[2].textContent = a.spender;
+        tr.children[2].textContent = a.amount === "unlimited" ? "Unlimited" : a.amount + " HMS";
+        tr.children[3].children[0].textContent = risk[1];
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "danger";
+        btn.textContent = "Revoke";
+        btn.disabled = a.amount === "0.0" || data.drained;
+        btn.onclick = () => revoke(a);
+        tr.children[4].appendChild(btn);
+        body.appendChild(tr);
+      }
+    }
+
+    async function post(path, body) {
+      const res = await fetch(API + path, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body || {}),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "request failed");
+      return json;
+    }
+
+    async function confirmRequest() {
+      document.getElementById("confirm-button").disabled = true;
+      try {
+        await post("/wallet/confirm");
+        await refresh();
+      } catch (err) {
+        notice("request-notice", "bad", "Transaction failed: " + err.message);
+      }
+    }
+
+    function rejectRequest() {
+      post("/wallet/reject").catch(() => {});
+      notice("request-notice", "good", "<strong>Rejected.</strong> In real life that's the right call: a claim never needs "
+        + "permission to spend your tokens. For this challenge, click <strong>Confirm</strong> to see what happens to people who don't check.");
+    }
+
+    async function revoke(a) {
+      if (a.name === "SwapRouter" && !window.confirm("SwapRouter is the DEX you use. Revoke it anyway?")) return;
+      try {
+        await post("/wallet/revoke", { spender: a.spender });
+        notice("approvals-notice", "good", "Revoked " + a.name + ": <code>approve(" + shortAddr(a.spender) + ", 0)</code> sent from Account #0.");
+        await refresh();
+      } catch (err) {
+        notice("approvals-notice", "bad", "Revoke failed: " + err.message);
+      }
+    }
+
+    async function refresh() {
+      try {
+        const res = await fetch(API + "/status");
+        if (!res.ok) throw new Error("status " + res.status);
+        const data = await res.json();
+        setStatus("connected", "Server connected", "Server is up and running");
+        setText("wallet", data.wallet);
+        setText("balance", data.balance + " HMS");
+        setText("tokenAddress", data.tokenAddress);
+        setText("routerAddress", data.routerAddress);
+        setText("airdropAddress", data.airdropAddress);
+        setText("routerAllowance", data.routerAllowance);
+        setText("airdropAllowance", data.airdropAllowance);
+        setText("network", data.network || "http://127.0.0.1:8545");
+        setText("chainId", data.chainId || 31337);
+        latest = data;
+        fetchedAt = Date.now();
+        renderSigned(data.signed || []);
+        renderApprovals(data);
+        renderRequest(data);
+        renderAlert();
+        if (data.pendingRequest) {
+          const req = data.pendingRequest;
+          setText("req-site", req.site);
+          setText("req-label", req.label);
+          setText("req-from", req.from);
+          setText("req-to", req.to);
+          setText("req-value", req.value + " ETH");
+          setText("req-data", req.data);
+        }
+
+        const badge = document.getElementById("solvedBadge");
+        const flagBox = document.getElementById("flagBox");
+        if (data.solved) {
+          const solvedRes = await fetch(API + "/check-solved");
+          const solvedData = await solvedRes.json();
+          badge.innerHTML = '<span class="solved">Challenge solved</span>';
+          if (solvedData.flag) {
+            setText("flagValue", solvedData.flag);
+            flagBox.style.display = "block";
+          }
+        } else if (data.drained) {
+          badge.innerHTML = '<span class="drained">Wallet drained. Restart the challenge to try again.</span>';
+          flagBox.style.display = "none";
+        } else {
+          badge.textContent = "";
+          flagBox.style.display = "none";
+        }
+      } catch (err) {
+        setStatus("waiting", "Connecting to server…", "Waiting for server to come up");
+        console.error(err);
+      }
+    }
+
+    document.querySelectorAll(".tab").forEach((tab) => {
+      tab.addEventListener("click", () => showTab(tab.dataset.tab));
+    });
+
+    document.querySelectorAll(".abi-toggle").forEach((button) => {
+      button.addEventListener("click", async () => {
+        const name = button.dataset.contract;
+        const box = document.querySelector('.abi-box[data-contract="' + name + '"]');
+        const open = box.style.display === "block";
+        box.style.display = open ? "none" : "block";
+        button.textContent = open ? "Show ABI" : "Hide ABI";
+        if (open || box.textContent.trim() !== "Loading ABI...") return;
+        try {
+          const res = await fetch(API + "/abi");
+          if (!res.ok) throw new Error("abi " + res.status);
+          box.textContent = JSON.stringify((await res.json())[name], null, 2);
+        } catch (err) {
+          box.textContent = "Unable to load ABI.";
+        }
+      });
+    });
+
+    document.getElementById("refresh-button").addEventListener("click", refresh);
+    document.getElementById("claim-button").addEventListener("click", () => showTab("request"));
+    document.getElementById("confirm-button").addEventListener("click", confirmRequest);
+    document.getElementById("reject-button").addEventListener("click", rejectRequest);
+
+    document.querySelectorAll(".pk-toggle").forEach((toggle) => {
+      toggle.addEventListener("click", () => {
+        const key = document.getElementById(toggle.dataset.key);
+        key.style.display = key.style.display === "block" ? "none" : "block";
+      });
+    });
+
+    document.addEventListener("click", (e) => {
+      const el = e.target.closest(".copyable");
+      if (!el) return;
+      const text = el.textContent.trim();
+      if (text && text !== "Loading...") navigator.clipboard.writeText(text);
+    });
+
+    showTab(location.hash.slice(1) || "overview");
+    refresh();
+    setInterval(refresh, 3000);
+    setInterval(renderAlert, 1000);
+  </script>
+</body>
+</html>
